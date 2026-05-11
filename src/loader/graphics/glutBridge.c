@@ -92,7 +92,7 @@ void bridgeGlutSwapBuffers(void)
     blitStretch();
 
     if (config->borderEnabled)
-        drawGameBorder(drawableW, drawableH, config->whiteBorderPercentage, config->blackBorderPercentage);
+        drawGameBorder(drawableW, drawableH, config->whiteBorderPixels, config->blackBorderPixels);
 
     SDL_GL_SwapWindow(g_SdlWindow);
 
