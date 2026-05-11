@@ -1,58 +1,67 @@
 #include <glad/gl.h>
-
 #include "border.h"
 
-void drawBorderWithOffset(int width, int height, float borderPercentage, float offsetPercentage, GLfloat *color)
+static void drawBorderWithOffset(int width, int height, int borderPixels, int offsetPixels, GLfloat *color)
 {
-    // Border thickness based on the percentage of the width/height
-    int borderWidth = (int)(width * borderPercentage); // Border width as a percentage of the screen width
-    int borderHeight = borderWidth;
+    if (borderPixels <= 0)
+        return;
 
-    // Offset based on the percentage of the width/height
-    int offsetX = (int)(width * offsetPercentage); // Horizontal offset from the screen edge
-    int offsetY = offsetX;
+    if (offsetPixels < 0)
+        offsetPixels = 0;
 
-    // Set the clear color based on the color parameter
+    int innerWidth = width - (2 * offsetPixels);
+    int innerHeight = height - (2 * offsetPixels);
+
+    if (innerWidth <= 0 || innerHeight <= 0)
+        return;
+
+    if (borderPixels * 2 > innerWidth)
+        borderPixels = innerWidth / 2;
+
+    if (borderPixels * 2 > innerHeight)
+        borderPixels = innerHeight / 2;
+
     glad_glClearColor(color[0], color[1], color[2], color[3]);
 
-    // Left side (borderWidth wide from top to bottom, starting from the left edge with offset)
-    glad_glScissor(offsetX, offsetY, borderWidth,
-                   height - 2 * offsetY); // X = offsetX, Y = offsetY, Width = borderWidth, Height = (height - 2 * offsetY)
+    // Left
+    glad_glScissor(offsetPixels, offsetPixels, borderPixels, innerHeight);
     glad_glClear(GL_COLOR_BUFFER_BIT);
 
-    // Right side (borderWidth wide from top to bottom, starting from the right edge with offset)
-    glad_glScissor(
-        width - borderWidth - offsetX, offsetY, borderWidth,
-        height - 2 * offsetY); // X = (width - borderWidth - offsetX), Y = offsetY, Width = borderWidth, Height = (height - 2 * offsetY)
+    // Right
+    glad_glScissor(width - borderPixels - offsetPixels, offsetPixels, borderPixels, innerHeight);
     glad_glClear(GL_COLOR_BUFFER_BIT);
 
-    // Top side (borderHeight wide from left to right, starting from the top edge with offset)
-    glad_glScissor(offsetX, offsetY, width - 2 * offsetX,
-                   borderHeight); // X = offsetX, Y = offsetY, Width = (width - 2 * offsetX), Height = borderHeight
+    // Bottom
+    glad_glScissor(offsetPixels, offsetPixels, innerWidth, borderPixels);
     glad_glClear(GL_COLOR_BUFFER_BIT);
 
-    // Bottom side (borderHeight wide from left to right, starting from the bottom edge with offset)
-    glad_glScissor(
-        offsetX, height - borderHeight - offsetY, width - 2 * offsetX,
-        borderHeight); // X = offsetX, Y = (height - borderHeight - offsetY), Width = (width - 2 * offsetX), Height = borderHeight
+    // Top
+    glad_glScissor(offsetPixels, height - borderPixels - offsetPixels, innerWidth, borderPixels);
     glad_glClear(GL_COLOR_BUFFER_BIT);
 }
 
-void drawGameBorder(int width, int height, float whiteBorderPercentage, float blackBorderPercentage)
+void drawGameBorder(int width, int height, int whiteBorderPixels, int blackBorderPixels)
 {
-    // Store the old clear colour
     GLfloat originalClearColour[4];
     glad_glGetFloatv(GL_COLOR_CLEAR_VALUE, originalClearColour);
 
-    GLfloat blackColour[4] = {0.0, 0.0, 0.0, 0.0};
-    GLfloat whiteColour[4] = {1.0, 1.0, 1.0, 0.0};
+    GLfloat blackColour[4] = {0.0, 0.0, 0.0, 1.0};
+    GLfloat whiteColour[4] = {1.0, 1.0, 1.0, 1.0};
 
     glad_glEnable(GL_SCISSOR_TEST);
 
-    drawBorderWithOffset(width, height, whiteBorderPercentage, blackBorderPercentage, whiteColour);
-    drawBorderWithOffset(width, height, blackBorderPercentage, 0, blackColour);
+    // Draw white border inset by the black border amount.
+    drawBorderWithOffset(width, height, whiteBorderPixels, blackBorderPixels, whiteColour);
+
+    // Draw black outer border.
+    drawBorderWithOffset(width, height, blackBorderPixels, 0, blackColour);
 
     glad_glDisable(GL_SCISSOR_TEST);
 
-    glad_glClearColor(originalClearColour[0], originalClearColour[1], originalClearColour[2], originalClearColour[3]);
+    glad_glClearColor(
+        originalClearColour[0],
+        originalClearColour[1],
+        originalClearColour[2],
+        originalClearColour[3]
+    );
 }
