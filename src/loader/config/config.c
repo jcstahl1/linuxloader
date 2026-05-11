@@ -1,217 +1,549 @@
-#include "configIni.h"
-#include "config.h"
-#include "../log/log.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 
-int createDefaultIni(const char *filePath)
+#include "config.h"
+#include "gameData.h"
+#include "../graphics/gpuVendor.h"
+#include "../log/log.h"
+#include "iniParser.h"
+#include "../mainShared.h"
+
+EmulatorConfig config = {0};
+
+extern uint32_t partialElfCrc;
+
+FILE *configFile = NULL;
+
+#define CONFIG_PATH "linuxloader.ini"
+#define MAX_LINE_LENGTH 1024
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
+const char *LindbergColourStrings[] = {"Lindbergh Yellow", "Lindbergh Red", "Lindbergh Blue", "Lindbergh Silver", "Lindbergh RedEX"};
+
+const char *GameRegionStrings[] = {"Japan", "US", "Export"};
+
+const char *GpuTypeStrings[] = {"Auto Detection", "NVIDIA", "AMD", "ATI", "INTEL", "Unknown", "ERROR_GPU"};
+
+static int detectGame(uint32_t elf_crc)
 {
-    printf("Generating default %s\n", filePath);
-    
-    FILE *file = fopen(filePath, "w");
-    if (!file)
+    const GameData *gameData = getGameData(elf_crc);
+
+    if (gameData)
     {
-        log_error("Could not create default INI file at %s", filePath);
-        return -1;
+        config.gameTitle = (char *)gameData->gameTitle;
+        config.gameShortTitle = (char *)gameData->gameShortTitle;
+        config.gameDVP = (char *)gameData->gameDVP;
+        config.gameID = (char *)gameData->gameID;
+        config.gameReleaseYear = (char *)gameData->gameReleaseYear;
+        config.gameNativeResolutions = (char *)gameData->gameNativeResolutions;
+        config.gameStatus = gameData->gameStatus;
+        config.jvsIOType = gameData->jvsIOType;
+        config.gameType = gameData->gameType;
+        config.width = gameData->width;
+        config.height = gameData->height;
+        config.gameGroup = gameData->gameGroup;
+        config.emulateRideboard = gameData->emulateRideboard;
+        config.emulateDriveboard = gameData->emulateDriveboard;
+        config.emulateMotionboard = gameData->emulateMotionboard;
+        config.emulateHW210CardReader = gameData->emulateHW210CardReader;
+        config.emulateIDCardReader = gameData->emulateIDCardReader;
+        config.emulateTouchscreen = gameData->emulateTouchscreen;
+        config.gameLindberghColour = gameData->gameLindberghColour;
+        return 0;
     }
 
-    EmulatorConfig defaults = {0};
-    setDefaultValues(&defaults);
+    config.crc32 = UNKNOWN;
+    return 1;
+}
 
-    fprintf(file, "# Linux Loader Configuration File\n");
-    fprintf(file, "# By the Linux Loader Development Team 2026\n\n");
+char *getGameName()
+{
+    return config.gameTitle;
+}
 
+char *getDvpName()
+{
+    return config.gameDVP;
+}
+
+char *getGameId()
+{
+    return config.gameID;
+}
+
+int getGameLindberghColour()
+{
+    return config.gameLindberghColour;
+}
+
+char *getGameReleaseYear()
+{
+    return config.gameReleaseYear;
+}
+
+char *getGameNativeResolutions()
+{
+    return config.gameNativeResolutions;
+}
+
+const char *getLindberghColourString(Colour lindberghColour)
+{
+    return LindbergColourStrings[lindberghColour];
+}
+
+const char *getGameRegionString(GameRegion region)
+{
+    return GameRegionStrings[region];
+}
+
+const char *getGpuTypeString(GpuType gpuType)
+{
+    return GpuTypeStrings[gpuType];
+}
+
+void toLowerCase(char *str)
+{
+    while (*str)
+    {
+        *str = tolower((unsigned char)*str);
+        str++;
+    }
+}
+
+void setDefaultValues(EmulatorConfig *cfg)
+{
+    cfg->emulateRideboard = 0;
+    cfg->emulateDriveboard = 0;
+    cfg->emulateMotionboard = 0;
+    cfg->emulateHW210CardReader = 0;
+    cfg->emulateIDCardReader = 0;
+    cfg->idCardFileAutoload = 1;
+    cfg->emulateTouchscreen = 0;
+    strcpy(cfg->cardFile1, "Card_01.crd");
+    strcpy(cfg->cardFile2, "Card_02.crd");
+    strcpy(cfg->idCardFolder, "");
+    cfg->emulateJVS = 1;
+    cfg->fullscreen = 0;
+    cfg->lindberghColour = YELLOW;
+    strcpy(cfg->eepromPath, "eeprom.bin");
+    strcpy(cfg->sramPath, "sram.bin");
+    strcpy(cfg->libCgPath, "");
+    strcpy(cfg->jvsPath, "/dev/ttyUSB0");
+    strcpy(cfg->serial1Path, "/dev/ttyS0");
+    strcpy(cfg->serial2Path, "/dev/ttyS1");
+    cfg->width = 640;
+    cfg->height = 480;
+    cfg->boostRenderRes = 1;
+    cfg->region = EX;
+    cfg->freeplay = -1;
+    cfg->showDebugMessages = 0;
+    cfg->useAltJvsPassthrough = 0;
+    cfg->hummerFlickerFix = 0;
+    cfg->keepAspectRatio = 1;
+    cfg->outrunLensGlareEnabled = 1;
+    cfg->ramboGunsSwitch = 0;
+    cfg->id5ChineseLanguage = 0;
+    cfg->idSteeringPercentageReduction = 0.0f;
+    cfg->lgjRenderWithMesa = 1;
+    cfg->gameTitle = "Unknown game";
+    cfg->gameID = "XXXX";
+    cfg->gameDVP = "DVP-XXXX";
+    cfg->gameType = SHOOTING;
+    cfg->gameLindberghColour = YELLOW;
+    cfg->gameReleaseYear = "";
+    cfg->gameNativeResolutions = "";
+    cfg->jvsIOType = SEGA_TYPE_3;
+    cfg->GPUVendor = AUTO_DETECT_GPU;
+    cfg->fpsLimiter = 1;
+    cfg->fpsTarget = 60.0f;
+    cfg->phScreenMode = 2;
+    cfg->phTestScreenSingle = 1;
+    cfg->disableBuiltinFont = 0;
+    cfg->disableBuiltinLogos = 0;
+    cfg->hideCursor = 1;
+    cfg->customCursorEnabled = 0;
+    strcpy(cfg->customCursor, "");
+    cfg->customCursorWidth = 32;
+    cfg->customCursorHeight = 32;
+    strcpy(cfg->touchCursor, "");
+    cfg->touchCursorWidth = 32;
+    cfg->touchCursorHeight = 32;
+    cfg->mj4EnabledAtT = 0;
+    cfg->enableNetworkPatches = 1;
+    strcpy(cfg->idIpSeat1, "");
+    strcpy(cfg->idIpSeat2, "");
+    strcpy(cfg->nicName, "");
+    strcpy(cfg->or2IP, "");
+    strcpy(cfg->or2Netmask, "");
+    strcpy(cfg->IpCab1, "");
+    strcpy(cfg->IpCab2, "");
+    strcpy(cfg->IpCab3, "");
+    strcpy(cfg->IpCab4, "");
+    strcpy(cfg->tooSpicyIpCab1, "");
+    strcpy(cfg->tooSpicyIpCab2, "");
+    strcpy(cfg->srtvIP, "");
+    cfg->cpuFreqGhz = 0.0f;
+    memset(&cfg->arcadeInputs, 0, sizeof(cfg->arcadeInputs));
+    cfg->crc32 = 0;
+    cfg->gameGroup = GROUP_UNKNOWN;
+    cfg->skipOutrunCabinetCheck = 0;
+    cfg->borderEnabled = 0;
+    cfg->whiteBorderPixels = 5;
+	cfg->blackBorderPixels = 0;
+    cfg->inputMode = 1;
+    cfg->enableCrosshairs = 0;
+    cfg->gsevoAlwaysCrosshair = 0;
+    strcpy(cfg->p1CrossHairPath, "");
+    strcpy(cfg->p2CrossHairPath, "");
+    cfg->customCrossHairWidth = 64;
+    cfg->customCrossHairHeight = 64;
+}
+
+static const char *getValue(const IniConfig *ini, const char *sectionName, const char *key)
+{
+    IniSection *section = iniGetSection(ini, sectionName);
+    if (!section)
+    {
+        return NULL;
+    }
+    for (int i = 0; i < section->numPairs; i++)
+    {
+        if (strcmp(section->pairs[i].key, key) == 0)
+        {
+            return section->pairs[i].value;
+        }
+    }
+    return NULL;
+}
+
+static char *cleanValue(const char *rawValue, char *buffer, size_t bufferSize)
+{
+    if (!rawValue || bufferSize == 0)
+        return NULL;
+
+    strncpy(buffer, rawValue, bufferSize - 1);
+    buffer[bufferSize - 1] = '\0';
+
+    char *start = buffer;
+    char *end = buffer + strlen(buffer) - 1;
+
+    while (isspace((unsigned char)*start))
+        start++;
+    while (end > start && isspace((unsigned char)*end))
+        end--;
+    *(end + 1) = '\0';
+
+    if (*start == '"' && *end == '"')
+    {
+        start++;
+        *end = '\0';
+    }
+    return start;
+}
+
+static int getInt(const IniConfig *ini, const char *section, const char *key, int defaultValue)
+{
+    const char *rawValue = getValue(ini, section, key);
+    if (!rawValue)
+        return defaultValue;
+
+    char cleanBuffer[256];
+    char *valueStr = cleanValue(rawValue, cleanBuffer, sizeof(cleanBuffer));
+    if (!valueStr)
+        return defaultValue;
+
+    char tempStr[256];
+    strncpy(tempStr, valueStr, sizeof(tempStr) - 1);
+    tempStr[sizeof(tempStr) - 1] = '\0';
+    toLowerCase(tempStr);
+
+    if (strcmp(tempStr, "auto") == 0)
+    {
+        return defaultValue;
+    }
+    if (strcmp(tempStr, "true") == 0)
+    {
+        return 1;
+    }
+    if (strcmp(tempStr, "false") == 0)
+    {
+        return 0;
+    }
+    if (strcmp(tempStr, "none") == 0)
+    {
+        return -1;
+    }
+    return atoi(valueStr);
+}
+
+static float getFloat(const IniConfig *ini, const char *section, const char *key, float defaultValue)
+{
+    const char *rawValue = getValue(ini, section, key);
+    if (!rawValue)
+        return defaultValue;
+    char cleanBuffer[256];
+    char *valueStr = cleanValue(rawValue, cleanBuffer, sizeof(cleanBuffer));
+    return valueStr ? atof(valueStr) : defaultValue;
+}
+
+static void getString(const IniConfig *ini, const char *section, const char *key, char *dest, int dest_size)
+{
+    const char *rawValue = getValue(ini, section, key);
+    if (rawValue)
+    {
+        char cleanBuffer[MAX_PATH_LENGTH];
+        char *valueStr = cleanValue(rawValue, cleanBuffer, sizeof(cleanBuffer));
+        if (valueStr)
+        {
+            strncpy(dest, valueStr, dest_size - 1);
+            dest[dest_size - 1] = '\0';
+        }
+    }
+}
+
+void applyIniConfig(EmulatorConfig *config, const IniConfig *ini)
+{
     // [Display]
-    fprintf(file, "[Display]\n");
-    fprintf(file, "# Set the width resolution here\nWIDTH = AUTO\n\n");
-    fprintf(file, "# Set the height resolution here\nHEIGHT = AUTO\n\n");
-    fprintf(file, "# Boost render resolution in HOD4/2Spicy/Harley/Rambo/HOD-EX/ID4/ID5 and LGJ\n");
-    fprintf(file, "BOOST_RENDER_RES = %s\n\n", defaults.boostRenderRes ? "true" : "false");
-    fprintf(file, "# Set to true for full screen\nFULLSCREEN = %s\n\n", defaults.fullscreen ? "true" : "false");
-    fprintf(file, "# Set to true if you\'d like to add a border for optical light gun tracking\n");
-    fprintf(file, "BORDER_ENABLED = %s\n\n", defaults.borderEnabled ? "true" : "false");
-    fprintf(file, "# Set the thickness of the white border in pixels\n");
-	fprintf(file, "WHITE_BORDER_PIXELS = %d\n\n", defaults.whiteBorderPixels);
-	fprintf(file, "# Set the thickness of the black border around the white border in pixels\n");
-	fprintf(file, "BLACK_BORDER_PIXELS = %d\n\n", defaults.blackBorderPixels);
-    fprintf(file, "# Set to keep the aspect ratio in games like Sega Race TV Primeval Hunt and LGJ-SP\n");
-    fprintf(file, "KEEP_ASPECT_RATIO = %s\n\n", defaults.keepAspectRatio ? "true" : "false");
-    fprintf(file, "# Set to true to enable the mouse pointer/Cursor\nHIDE_CURSOR = %s\n\n", defaults.hideCursor ? "true" : "false");
+    config->width = getInt(ini, "Display", "WIDTH", config->width);
+    config->height = getInt(ini, "Display", "HEIGHT", config->height);
+    config->boostRenderRes = getInt(ini, "Display", "BOOST_RENDER_RES", config->boostRenderRes);
+    config->fullscreen = getInt(ini, "Display", "FULLSCREEN", config->fullscreen);
+    config->borderEnabled = getInt(ini, "Display", "BORDER_ENABLED", config->borderEnabled);
+	config->whiteBorderPixels = getInt(ini, "Display", "WHITE_BORDER_PIXELS", config->whiteBorderPixels);
+	config->blackBorderPixels = getInt(ini, "Display", "BLACK_BORDER_PIXELS", config->blackBorderPixels);
+    config->keepAspectRatio = getInt(ini, "Display", "KEEP_ASPECT_RATIO", config->keepAspectRatio);
+    config->hideCursor = getInt(ini, "Display", "HIDE_CURSOR", config->hideCursor);
 
     // [Input]
-    fprintf(file, "[Input]\n");
-    fprintf(file, "# Sets the Input Mode (1: SDL, 2: EVDEV\n");
-    fprintf(file, "INPUT_MODE = %d\n\n", defaults.inputMode);
+    config->inputMode = getInt(ini, "Input", "INPUT_MODE", config->inputMode);
 
     // [Emulation]
-    fprintf(file, "[Emulation]\n");
-    fprintf(file, "# Set the Region (JP/US/EX)\nREGION = EX\n\n");
-    fprintf(file, "# Set to true for Free Play, none to leave as default\nFREEPLAY = none\n\n");
-    fprintf(file, "# Set to true to emulate JVS and use the keyboard/mouse for controls.\n");
-    fprintf(file, "# If this is set to false, the loader will route the traffic to the serial device\n");
-    fprintf(file, "# defined in JVS_PATH if it has been defined.\nEMULATE_JVS = %s\n\n", defaults.emulateJVS ? "true" : "false");
-    fprintf(file, "# Set to true to emulate the rideboard used in the SPECIAL games\n");
-    fprintf(file, "# If this is set to false, then the emulator will route the traffic to one of the serial ports\n");
-    fprintf(file, "EMULATE_RIDEBOARD = AUTO\n\n");
-    fprintf(file, "# Set to true to emulate the driveboard used in driving games\n");
-    fprintf(file, "# If this is set to false, then the emulator will route the traffic to one of the serial ports\n");
-    fprintf(file, "EMULATE_DRIVEBOARD = AUTO\n\n");
-    fprintf(file, "# Set to true to emulate the motion board from Outrun 2 SP SDX\n");
-    fprintf(file, "# If this is set to false, then the emulator will route the traffic to one of the serial ports\n");
-    fprintf(file, "EMULATE_MOTIONBOARD = AUTO\n\n");
-    fprintf(file, "# Set to true to enable card reader emulation in Virtua Tennis 3 or R-Tuned\nEMULATE_HW210_CARDREADER = AUTO\n\n");
-    fprintf(file, "# Set to true to enable card reader emulation in ID4 and ID5 file \nEMULATE_ID_CARD_READER = AUTO\n\n");
-    fprintf(file, "# Set to true to enable touchscreen emulation  with the mouse\nEMULATE_TOUCHSCREEN = AUTO\n\n");
+    const char *regionRaw = getValue(ini, "Emulation", "REGION");
+    if (regionRaw)
+    {
+        char cleanBuffer[16];
+        char *regionStr = cleanValue(regionRaw, cleanBuffer, sizeof(cleanBuffer));
+        if (strcmp(regionStr, "JP") == 0)
+            config->region = JP;
+        else if (strcmp(regionStr, "US") == 0)
+            config->region = US;
+        else if (strcmp(regionStr, "EX") == 0)
+            config->region = EX;
+    }
+    config->freeplay = getInt(ini, "Emulation", "FREEPLAY", config->freeplay);
+    config->emulateJVS = getInt(ini, "Emulation", "EMULATE_JVS", config->emulateJVS);
+    config->emulateRideboard = getInt(ini, "Emulation", "EMULATE_RIDEBOARD", config->emulateRideboard);
+    config->emulateDriveboard = getInt(ini, "Emulation", "EMULATE_DRIVEBOARD", config->emulateDriveboard);
+    config->emulateMotionboard = getInt(ini, "Emulation", "EMULATE_MOTIONBOARD", config->emulateMotionboard);
+    config->emulateHW210CardReader = getInt(ini, "Emulation", "EMULATE_HW210_CARDREADER", config->emulateHW210CardReader);
+    config->emulateIDCardReader = getInt(ini, "Emulation", "EMULATE_ID_CARDREADER", config->emulateIDCardReader);
+    config->emulateTouchscreen = getInt(ini, "Emulation", "EMULATE_TOUCHSCREEN", config->emulateTouchscreen);
 
     // [Cards]
-    fprintf(file, "[Cards]\n");
-    fprintf(file, "# Set to false to use a button to insert a card manually in ID4 or ID5.\n");
-    fprintf(file, "# Or true to make the loader auto load\nID_CARDFILE_AUTOLOAD = %s\n\n", defaults.idCardFileAutoload ? "true" : "false");
-    fprintf(file, "# Card File for reader 1 in VT3 or R-Tuned\nCARDFILE_01 = \"%s\"\n\n", defaults.cardFile1);
-    fprintf(file, "# Card File for reader 2 in VT3 or R-Tuned\nCARDFILE_02 = \"%s\"\n\n", defaults.cardFile2);
-    fprintf(file, "# Folder for ID Card files\nID_CARDFOLDER = \"%s\"\n\n", defaults.idCardFolder);
+    config->idCardFileAutoload = getInt(ini, "Cards", "ID_CARDFILE_AUTOLOAD", config->idCardFileAutoload);
+    getString(ini, "Cards", "CARDFILE_01", config->cardFile1, MAX_PATH_LENGTH);
+    getString(ini, "Cards", "CARDFILE_02", config->cardFile2, MAX_PATH_LENGTH);
+    getString(ini, "Cards", "ID_CARDFOLDER", config->idCardFolder, MAX_PATH_LENGTH);
 
     // [Paths]
-    fprintf(file, "[Paths]\n");
-    fprintf(file, "# Define the path to pass the JVS packets to if JVS is not being emulated\nJVS_PATH = \"%s\"\n\n", defaults.jvsPath);
-    fprintf(file, "# Define the path to pass the first serial port to\nSERIAL_1_PATH = \"%s\"\n\n", defaults.serial1Path);
-    fprintf(file, "# Define the path to pass the second serial port to\nSERIAL_2_PATH = \"%s\"\n\n", defaults.serial2Path);
-    fprintf(file, "# Define the path to the sram.bin file\nSRAM_PATH = \"%s\"\n\n", defaults.sramPath);
-    fprintf(file, "# Define the path to the eeprom.bin file\nEEPROM_PATH = \"%s\"\n\n", defaults.eepromPath);
-    fprintf(file, "# If set, libCG.so needed for 2Spicy, Harley, Rambo and HOD-Ex shader recompilation\n");
-    fprintf(file, "# will be loaded from the specified location. (include the name of file in the location ");
-    fprintf(file, "For Example: /my/file/location/myLibCg.so)\nLIBCG_PATH = \"%s\"\n\n", defaults.libCgPath);
+    getString(ini, "Paths", "JVS_PATH", config->jvsPath, MAX_PATH_LENGTH);
+    getString(ini, "Paths", "SERIAL_1_PATH", config->serial1Path, MAX_PATH_LENGTH);
+    getString(ini, "Paths", "SERIAL_2_PATH", config->serial2Path, MAX_PATH_LENGTH);
+    getString(ini, "Paths", "SRAM_PATH", config->sramPath, MAX_PATH_LENGTH);
+    getString(ini, "Paths", "EEPROM_PATH", config->eepromPath, MAX_PATH_LENGTH);
+    getString(ini, "Paths", "LIBCG_PATH", config->libCgPath, MAX_PATH_LENGTH);
 
     // [Graphics]
-    fprintf(file, "[Graphics]\n");
-    fprintf(file, "# Set to true if you experience flickering in hummer\n");
-    fprintf(file, "HUMMER_FLICKER_FIX = %s\n\n", defaults.hummerFlickerFix ? "true" : "false");
-    fprintf(file, "# Set to false if you don't want to limit the FPS\n");
-    fprintf(file, "FPS_LIMITER_ENABLED = %s\n\n", defaults.fpsLimiter ? "true" : "false");
-    fprintf(file, "# Set the target FPS (will only work if FPS_LIMITER_ENABLED = 1)\nFPS_TARGET = %.1f\n\n", defaults.fpsTarget);
-    fprintf(file, "# Set to true if you want to render LGJ using the mesa patches\n");
-    fprintf(file, "LGJ_RENDER_WITH_MESA = %s\n\n", defaults.lgjRenderWithMesa ? "true" : "false");
-    fprintf(file, "# Disable to use the original fonts instead of the built in font\n");
-    fprintf(file, "DISABLE_BUILTIN_FONT = %s\n\n", defaults.disableBuiltinFont ? "true" : "false");
-    fprintf(file, "# Disable to use the original logos instead of the built in logos\n");
-    fprintf(file, "DISABLE_BUILTIN_LOGOS = %s\n\n", defaults.disableBuiltinLogos ? "true" : "false");
+    config->hummerFlickerFix = getInt(ini, "Graphics", "HUMMER_FLICKER_FIX", config->hummerFlickerFix);
+    config->outrunLensGlareEnabled = getInt(ini, "Graphics", "OUTRUN_LENS_GLARE_ENABLED", config->outrunLensGlareEnabled);
+    config->fpsLimiter = getInt(ini, "Graphics", "FPS_LIMITER_ENABLED", config->fpsLimiter);
+    config->fpsTarget = getFloat(ini, "Graphics", "FPS_TARGET", config->fpsTarget);
+    config->lgjRenderWithMesa = getInt(ini, "Graphics", "LGJ_RENDER_WITH_MESA", config->lgjRenderWithMesa);
+    config->disableBuiltinFont = getInt(ini, "Graphics", "DISABLE_BUILTIN_FONT", config->disableBuiltinFont);
+    config->disableBuiltinLogos = getInt(ini, "Graphics", "DISABLE_BUILTIN_LOGOS", config->disableBuiltinLogos);
 
     // [Cursor]
-    fprintf(file, "[Cursor]\n");
-    fprintf(file, "# If true, a custom mouse cursor will be used loaded from a png file set in CUSTOM_CURSOR\n");
-    fprintf(file, "# Ovewrites HIDE_CURSOR\n");
-    fprintf(file, "CUSTOM_CURSOR_ENABLED = %s\n\n", defaults.customCursorEnabled ? "true" : "false");
-    fprintf(file, "# Set the custom mouse pointer from a PNG file (Usefull for shooting games)\n");
-    fprintf(file, "CUSTOM_CURSOR = \"%s\"\n\n", defaults.customCursor);
-    fprintf(file, "# Set the width of the custom cursor\nCUSTOM_CURSOR_WIDTH = %d\n\n", defaults.customCursorWidth);
-    fprintf(file, "# Set the height of the custom cursor\nCUSTOM_CURSOR_HEIGHT = %d\n\n", defaults.customCursorHeight);
-    fprintf(file, "# Set a custom cursor for the touch screen in Primeval Hunt, MJ4 Games and AxA Games\n");
-    fprintf(file, "TOUCH_CURSOR = \"%s\"\n\n", defaults.touchCursor);
-    fprintf(file, "# Set the width of the custom cursor\nTOUCH_CURSOR_WIDTH = %d\n\n", defaults.touchCursorWidth);
-    fprintf(file, "# Set the height of the custom cursor\nTOUCH_CURSOR_HEIGHT = %d\n\n", defaults.touchCursorHeight);
+    config->customCursorEnabled = getInt(ini, "Cursor", "CUSTOM_CURSOR_ENABLED", config->customCursorEnabled);
+    getString(ini, "Cursor", "CUSTOM_CURSOR", config->customCursor, MAX_PATH_LENGTH);
+    config->customCursorWidth = getInt(ini, "Cursor", "CUSTOM_CURSOR_WIDTH", config->customCursorWidth);
+    config->customCursorHeight = getInt(ini, "Cursor", "CUSTOM_CURSOR_HEIGHT", config->customCursorHeight);
+    getString(ini, "Cursor", "TOUCH_CURSOR", config->touchCursor, MAX_PATH_LENGTH);
+    config->touchCursorWidth = getInt(ini, "Cursor", "TOUCH_CURSOR_WIDTH", config->touchCursorWidth);
+    config->touchCursorHeight = getInt(ini, "Cursor", "TOUCH_CURSOR_HEIGHT", config->touchCursorHeight);
 
     // [GameSpecific]
-    fprintf(file, "[GameSpecific]\n");
-    fprintf(file, "# Set Primeval Hunt\n# Mode 0: Default (side by side)\n# Mode 1: No Touch screen\n# Mode 2: Side By Side\n");
-    fprintf(file, "# Mode 3: 3ds mode 1 (Touch screen to the right)\n# Mode 4: 3ds mode 2 (Touch screen to the bottom)\n");
-    fprintf(file, "PRIMEVAL_HUNT_SCREEN_MODE = %d\n\n", defaults.phScreenMode);
-    fprintf(file, "# Set Primeval Hunt Test mode screen to single screen\n");
-    fprintf(file, "PRIMEVAL_HUNT_TEST_SCREEN_SINGLE = %s\n\n", defaults.phTestScreenSingle ? "true" : "false");
-    fprintf(file, "# Set to true to bypass cabinet checks including drive board and tower in Outrun 2 SP SDX\n");
-    fprintf(file, "SKIP_OUTRUN_CABINET_CHECK = %s\n\n", defaults.skipOutrunCabinetCheck ? "true" : "false");
-    fprintf(file, "# Set to false if you want to disable the Glare effect in OutRun\n");
-    fprintf(file, "OUTRUN_LENS_GLARE_ENABLED = %s\n\n", defaults.outrunLensGlareEnabled ? "true" : "false");
-    fprintf(file, "# Hacky way to make MJ4 and AxA work at prohibited times\nMJ4_ENABLED_ALL_THE_TIME = %s\n\n",
-            defaults.mj4EnabledAtT ? "true" : "false");
-    fprintf(file, "# House of the dead 4 speed fix, set the frequency of your CPU in Ghz\nCPU_FREQ_GHZ = %.1f\n\n", defaults.cpuFreqGhz);
-    fprintf(file, "# Set to true if you want to chnge the way the guns are show in Rambo\n");
-    fprintf(file, "RAMBO_GUNS_SWITCH = false\n\n");
-    fprintf(file, "# Set to true to set the language in Chinese for ID5 DVP-0084 and DVP-0084A\n");
-    fprintf(file, "ID5_CHINESE_LANGUAGE = %s\n\n", defaults.id5ChineseLanguage ? "true" : "false");
-    fprintf(file, "# Set the percentage of the steering wheel travel reduction\n");
-    fprintf(file, "ID_STEERING_REDUCTION_PERCENTAGE = %.1f\n\n", defaults.idSteeringPercentageReduction);
+    config->phScreenMode = getInt(ini, "GameSpecific", "PRIMEVAL_HUNT_SCREEN_MODE", config->phScreenMode);
+    config->phTestScreenSingle = getInt(ini, "GameSpecific", "PRIMEVAL_HUNT_TEST_SCREEN_SINGLE", config->phTestScreenSingle);
+    config->skipOutrunCabinetCheck = getInt(ini, "GameSpecific", "SKIP_OUTRUN_CABINET_CHECK", config->skipOutrunCabinetCheck);
+    config->mj4EnabledAtT = getInt(ini, "GameSpecific", "MJ4_ENABLED_ALL_THE_TIME", config->mj4EnabledAtT);
+    config->cpuFreqGhz = getFloat(ini, "GameSpecific", "CPU_FREQ_GHZ", config->cpuFreqGhz);
+    config->ramboGunsSwitch = getInt(ini, "GameSpecific", "RAMBO_GUNS_SWITCH", config->ramboGunsSwitch);
+    config->id5ChineseLanguage = getInt(ini, "GameSpecific", "ID5_CHINESE_LANGUAGE", config->id5ChineseLanguage);
+    config->idSteeringPercentageReduction =
+        getFloat(ini, "GameSpecific", "ID_STEERING_REDUCTION_PERCENTAGE", config->idSteeringPercentageReduction);
 
-    fprintf(file, "[CrossHairs]\n");
-    fprintf(file, "# Set to true to enable Crosshairs even when using GunLights\n");
-    fprintf(file, "ENABLE_CROSSHAIRS = %s\n\n", defaults.enableCrosshairs ? "true" : "false");
-    fprintf(file, "# Set the Crosshair image from a PNG file for Player 1\n");
-    fprintf(file, "P1_CROSSHAIR_PATH = \"%s\"\n\n", defaults.p1CrossHairPath);
-    fprintf(file, "# Set the Crosshair image from a PNG file for Player 2\n");
-    fprintf(file, "P2_CROSSHAIR_PATH = \"%s\"\n\n", defaults.p2CrossHairPath);
-    fprintf(file, "# Set the width of the Crosshair image\n");
-    fprintf(file, "CUSTOM_CROSSHAIRS_WIDTH = %d\n\n", defaults.customCrossHairWidth);
-    fprintf(file, "# Set the height of the Crosshair image\n");
-    fprintf(file, "CUSTOM_CROSSHAIRS_HEIGHT = %d\n\n", defaults.customCrossHairHeight);
-    fprintf(file, "# Set to true to always enable Crosshairs in Ghost Squad Evolution\n");
-    fprintf(file, "GSEVO_ALWAYS_CROSSHAIR = %s\n\n", defaults.gsevoAlwaysCrosshair ? "true" : "false");
+    // [CrossHairs]
+    config->enableCrosshairs = getInt(ini, "CrossHairs", "ENABLE_CROSSHAIRS", config->enableCrosshairs);
+    getString(ini, "CrossHairs", "P1_CROSSHAIR_PATH", config->p1CrossHairPath, MAX_PATH_LENGTH);
+    getString(ini, "CrossHairs", "P2_CROSSHAIR_PATH", config->p2CrossHairPath, MAX_PATH_LENGTH);
+    config->customCrossHairWidth = getInt(ini, "CrossHairs", "CUSTOM_CROSSHAIRS_WIDTH", config->customCrossHairWidth);
+    config->customCrossHairHeight = getInt(ini, "CrossHairs", "CUSTOM_CROSSHAIRS_HEIGHT", config->customCrossHairHeight);
+    config->gsevoAlwaysCrosshair = getInt(ini, "CrossHairs", "GSEVO_ALWAYS_CROSSHAIR", config->gsevoAlwaysCrosshair);
 
-    // [System]
-    fprintf(file, "[System]\n");
-    fprintf(file, "# Set to true to see debug messages in the console\n");
-    fprintf(file, "DEBUG_MSGS = %s\n\n", defaults.showDebugMessages ? "true" : "false");
-    fprintf(file, "# Set the colour of the lindbergh (YELLOW, RED, BLUE, SILVER, REDEX)\nLINDBERGH_COLOUR = YELLOW\n\n");
+    config->showDebugMessages = getInt(ini, "System", "DEBUG_MSGS", config->showDebugMessages);
+    config->useAltJvsPassthrough = getInt(ini, "System", "USE_ALT_JVS_PASSTHROUGH", config->useAltJvsPassthrough);
+    const char *colourRaw = getValue(ini, "System", "LINDBERGH_COLOUR");
+    if (colourRaw)
+    {
+        char cleanBuffer[32];
+        char *colourStr = cleanValue(colourRaw, cleanBuffer, sizeof(cleanBuffer));
+        for (char *p = colourStr; *p; ++p)
+            *p = toupper(*p);
+        if (strcmp(colourStr, "RED") == 0)
+            config->lindberghColour = RED;
+        else if (strcmp(colourStr, "YELLOW") == 0)
+            config->lindberghColour = YELLOW;
+        else if (strcmp(colourStr, "BLUE") == 0)
+            config->lindberghColour = BLUE;
+        else if (strcmp(colourStr, "SILVER") == 0)
+            config->lindberghColour = SILVER;
+        else if (strcmp(colourStr, "REDEX") == 0)
+            config->lindberghColour = REDEX;
+    }
 
     // [Network]
-    fprintf(file, "[Network]\n");
-    fprintf(file, "# If true, the loader will apply the following network patches depending on the game\n");
-    fprintf(file, "ENABLE_NETWORK_PATCHES = %s\n\n", defaults.enableNetworkPatches ? "true" : "false");
-    fprintf(file, "# Sets the name of the Network Interface Card\nNIC_NAME = \"enp0s1\"\n\n");
-    fprintf(file, "# ID4 and ID5 network configuration per seat\nID_IP_SEAT_1 = \"192.168.1.2\"\nID_IP_SEAT_2 = \"192.168.1.3\"\n\n");
-    fprintf(file, "# Sets the IP address and Netmask for Outrun link (you have to put your NIC ip)\n");
-    fprintf(file, "OR2_IPADDRESS = \"192.168.1.2\"\nOR2_NETMASK = \"255.255.255.0\"\n\n");
-    fprintf(file, "# Harley / Hummer and R-Tuned IP address for each Cabinet\n");
-    fprintf(file, "IP_CAB1 = \"192.168.1.2\"\nIP_CAB2 = \"192.168.1.3\"\nIP_CAB3 = \"192.168.1.4\"\nIP_CAB4 = \"192.168.1.5\"\n\n");
-    fprintf(file, "# Sets the IP address of each cabinet for network play in 2Spicy\n");
-    fprintf(file, "2SPICY_IP_CAB1 = \"192.168.1.2\"\n2SPICY_IP_CAB2 = \"192.168.1.3\"\n\n");
-    fprintf(file, "# Sets the IP address for SRTV\nSRTV_IPADDRESS = \"192.168.1.2\"\n\n");
+    config->enableNetworkPatches = getInt(ini, "Network", "ENABLE_NETWORK_PATCHES", config->enableNetworkPatches);
+    getString(ini, "Network", "ID_IP_SEAT_1", config->idIpSeat1, 16);
+    getString(ini, "Network", "ID_IP_SEAT_2", config->idIpSeat2, 16);
+    getString(ini, "Network", "NIC_NAME", config->nicName, 20);
+    getString(ini, "Network", "OR2_IPADDRESS", config->or2IP, 16);
+    getString(ini, "Network", "OR2_NETMASK", config->or2Netmask, 16);
+    getString(ini, "Network", "IP_CAB1", config->IpCab1, 16);
+    getString(ini, "Network", "IP_CAB2", config->IpCab2, 16);
+    getString(ini, "Network", "IP_CAB3", config->IpCab3, 16);
+    getString(ini, "Network", "IP_CAB4", config->IpCab4, 16);
+    getString(ini, "Network", "2SPICY_IP_CAB1", config->tooSpicyIpCab1, 16);
+    getString(ini, "Network", "2SPICY_IP_CAB2", config->tooSpicyIpCab2, 16);
+    getString(ini, "Network", "SRTV_IPADDRESS", config->srtvIP, 16);
 
     // [EVDEV]
-    fprintf(file, "[EVDEV]\n");
-    fprintf(file, "# EVDEV MODE (Input Mode 2)\n# To find the value pairs for these run ./linuxloader --list-controllers\n\n");
-    fprintf(file, "#TEST_BUTTON = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_T\"\n");
-    fprintf(file, "#EXIT_GAME = \"KEY_ESC, BTN_START+BTN_SELECT\"\n\n");
-    fprintf(file, "#PLAYER_1_COIN = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_5\"\n");
-    fprintf(file, "#PLAYER_1_BUTTON_START = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_1\n");
-    fprintf(file, "#PLAYER_1_BUTTON_SERVICE = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_S\"\n");
-    fprintf(file, "#PLAYER_1_BUTTON_UP = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_UP\"\n");
-    fprintf(file, "#PLAYER_1_BUTTON_DOWN = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_DOWN\"\n");
-    fprintf(file, "#PLAYER_1_BUTTON_LEFT = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_LEFT\"\n");
-    fprintf(file, "#PLAYER_1_BUTTON_RIGHT = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_RIGHT\"\n");
-    fprintf(file, "#PLAYER_1_BUTTON_1 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_Q\"\n");
-    fprintf(file, "#PLAYER_1_BUTTON_2 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_W\"\n");
-    fprintf(file, "#PLAYER_1_BUTTON_3 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_E\"\n");
-    fprintf(file, "#PLAYER_1_BUTTON_4 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_R\"\n");
-    fprintf(file, "#PLAYER_1_BUTTON_5 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_Y\"\n");
-    fprintf(file, "#PLAYER_1_BUTTON_6 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_U\"\n");
-    fprintf(file, "#PLAYER_1_BUTTON_7 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_I\"\n");
-    fprintf(file, "#PLAYER_1_BUTTON_8 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_O\"\n\n");
-    fprintf(file, "#PLAYER_1_COIN = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_6\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_START = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_1\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_SERVICE = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_S\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_UP = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_UP\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_DOWN = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_DOWN\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_LEFT = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_LEFT\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_RIGHT = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_RIGHT\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_1 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_Q\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_2 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_W\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_3 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_E\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_4 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_R\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_5 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_Y\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_6 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_U\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_7 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_I\"\n");
-    fprintf(file, "#PLAYER_2_BUTTON_8 = \"AT_TRANSLATED_SET_2_KEYBOARD_KEY_O\"\n\n");
-    fprintf(file, "#ANALOGUE_1 = \"SYNPS_2_SYNAPTICS_TOUCHPAD_ABS_X\"\n");
-    fprintf(file, "#ANALOGUE_2 = \"SYNPS_2_SYNAPTICS_TOUCHPAD_ABS_Y\"\n");
-    fprintf(file, "#ANALOGUE_3 = \"SYNPS_2_SYNAPTICS_TOUCHPAD_ABS_Z\"\n");
-    fprintf(file, "#ANALOGUE_4 = \"SYNPS_2_SYNAPTICS_TOUCHPAD_ABS_RZ\"\n");
-    fprintf(file, "#ANALOGUE_5 = \"SYNPS_2_SYNAPTICS_TOUCHPAD_ABS_X2\"\n");
-    fprintf(file, "#ANALOGUE_6 = \"SYNPS_2_SYNAPTICS_TOUCHPAD_ABS_Y2\"\n");
-    fprintf(file, "#ANALOGUE_7 = \"SYNPS_2_SYNAPTICS_TOUCHPAD_ABS_Z2\"\n");
-    fprintf(file, "#ANALOGUE_8 = \"SYNPS_2_SYNAPTICS_TOUCHPAD_ABS_RZ2\"\n\n");
+    getString(ini, "EVDEV", "TEST_BUTTON", config->arcadeInputs.test, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "EXIT_GAME", config->arcadeInputs.exit_game, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_COIN", config->arcadeInputs.player1_coin, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_START", config->arcadeInputs.player1_button_start, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_SERVICE", config->arcadeInputs.player1_button_service, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_UP", config->arcadeInputs.player1_button_up, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_DOWN", config->arcadeInputs.player1_button_down, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_LEFT", config->arcadeInputs.player1_button_left, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_RIGHT", config->arcadeInputs.player1_button_right, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_1", config->arcadeInputs.player1_button_1, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_2", config->arcadeInputs.player1_button_2, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_3", config->arcadeInputs.player1_button_3, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_4", config->arcadeInputs.player1_button_4, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_5", config->arcadeInputs.player1_button_5, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_6", config->arcadeInputs.player1_button_6, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_7", config->arcadeInputs.player1_button_7, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_1_BUTTON_8", config->arcadeInputs.player1_button_8, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_COIN", config->arcadeInputs.player2_coin, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_START", config->arcadeInputs.player2_button_start, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_SERVICE", config->arcadeInputs.player2_button_service, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_UP", config->arcadeInputs.player2_button_up, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_DOWN", config->arcadeInputs.player2_button_down, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_LEFT", config->arcadeInputs.player2_button_left, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_RIGHT", config->arcadeInputs.player2_button_right, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_1", config->arcadeInputs.player2_button_1, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_2", config->arcadeInputs.player2_button_2, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_3", config->arcadeInputs.player2_button_3, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_4", config->arcadeInputs.player2_button_4, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_5", config->arcadeInputs.player2_button_5, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_6", config->arcadeInputs.player2_button_6, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_7", config->arcadeInputs.player2_button_7, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "PLAYER_2_BUTTON_8", config->arcadeInputs.player2_button_8, INPUT_STRING_LENGTH);
 
-    for (int x = 1; x < 9; x++)
-        fprintf(file, "#ANALOGUE_DEADZONE_%d = 0 0 0\n", x);
+    getString(ini, "EVDEV", "ANALOGUE_1", config->arcadeInputs.analogue_1, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "ANALOGUE_2", config->arcadeInputs.analogue_2, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "ANALOGUE_3", config->arcadeInputs.analogue_3, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "ANALOGUE_4", config->arcadeInputs.analogue_4, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "ANALOGUE_5", config->arcadeInputs.analogue_5, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "ANALOGUE_6", config->arcadeInputs.analogue_6, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "ANALOGUE_7", config->arcadeInputs.analogue_7, INPUT_STRING_LENGTH);
+    getString(ini, "EVDEV", "ANALOGUE_8", config->arcadeInputs.analogue_8, INPUT_STRING_LENGTH);
 
-    fprintf(file, "\n");
-    fclose(file);
-    return 1;
+    for (int i = 0; i < 8; i++)
+    {
+        char key[32];
+        sprintf(key, "ANALOGUE_DEADZONE_%d", i + 1);
+        const char *rawDz = getValue(ini, "EVDEV", key);
+        if (rawDz)
+        {
+            char cleanBuffer[64];
+            char *dzStr = cleanValue(rawDz, cleanBuffer, sizeof(cleanBuffer));
+            if (dzStr)
+            {
+                sscanf(dzStr, "%d %d %d", &config->arcadeInputs.analogue_deadzone_start[i],
+                       &config->arcadeInputs.analogue_deadzone_middle[i], &config->arcadeInputs.analogue_deadzone_end[i]);
+            }
+        }
+    }
+}
+
+int initConfig(const char *configFilePath)
+{
+    setDefaultValues(&config);
+
+    config.crc32 = partialElfCrc;
+    if (detectGame(config.crc32) != 0)
+    {
+        log_warn("Unsure what game with CRC 0x%X is. Please submit this new game to the GitHub repository: "
+                 "https://github.com/lindbergh-loader/lindbergh-loader/issues/"
+                 "new?title=Please+add+new+game+0x%X&body=I+tried+to+launch+the+following+game:\n",
+                 config.crc32, config.crc32);
+    }
+
+    config.inputMode = 0;
+
+    char filePath[PATH_MAX];
+    if (configFilePath != NULL && configFilePath[0] != '\0')
+    {
+        strncpy(filePath, configFilePath, PATH_MAX - 1);
+    }
+    else
+    {
+        if (fileExists(CONFIG_PATH))
+        {
+            strncpy(filePath, CONFIG_PATH, PATH_MAX - 1);
+        }
+        else
+        {
+            // Fallback to legacy path to preserve backward compatibility with the old loader
+            strncpy(filePath, "lindbergh.ini", PATH_MAX - 1);
+        }
+    }
+    filePath[PATH_MAX - 1] = '\0';
+    IniConfig *ini = iniLoad(filePath);
+
+    if (ini == NULL)
+    {
+        log_warn("Cannot open or parse %s, using default values.", filePath);
+        return 1;
+    }
+
+    applyIniConfig(&config, ini);
+
+    if (config.customCursorEnabled && (strcmp(config.customCursor, "") != 0 || strcmp(config.touchCursor, "") != 0))
+        config.hideCursor = 0;
+
+    iniFree(ini);
+
+    return 0;
+}
+
+EmulatorConfig *getConfig()
+{
+    return &config;
 }
