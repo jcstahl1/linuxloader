@@ -1,3 +1,3 @@
 #pragma once
 
-void drawGameBorder(int width, int height, float whiteBorderPercentage, float blackBorderPercentage);
+void drawGameBorder(int width, int height, int whiteBorderPixels, int blackBorderPixels);
