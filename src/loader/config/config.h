@@ -333,8 +333,8 @@ typedef struct
     ArcadeInputs arcadeInputs;
     int inputMode; // 0 = both, 1 = SDL, 2 = EVDEV only
     int skipOutrunCabinetCheck;
-    float whiteBorderPercentage;
-    float blackBorderPercentage;
+    int whiteBorderPixels;
+	int blackBorderPixels;
     int borderEnabled;
     int enableCrosshairs;
     int gsevoAlwaysCrosshair;
