@@ -448,7 +448,7 @@ void bridgeGlxSwapBuffers(Display *dpy, GLXDrawable drawable)
     EmulatorConfig *config = getConfig();
 
     if (config->borderEnabled)
-        drawGameBorder(config->width, config->height, config->whiteBorderPercentage, config->blackBorderPercentage);
+        drawGameBorder(config->width, config->height, config->whiteBorderPixels, config->blackBorderPixels);
 
     if (p1CrossHairInitialized || p2CrossHairInitialized)
         renderCrosshairs();
