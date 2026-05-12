@@ -9,13 +9,6 @@ on:
       - '**.md'
       - '.github/ISSUE_TEMPLATE/*'
       - '.docs/changelog'
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - '**.md'
-      - '.github/ISSUE_TEMPLATE/*'
-      - '.docs/changelog'
 
 jobs:
   prepare-source:
@@ -80,7 +73,7 @@ jobs:
     name: 📤 Create Release and Notify
     needs: [linux-build, windows-build, prepare-source]
     runs-on: ubuntu-22.04
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

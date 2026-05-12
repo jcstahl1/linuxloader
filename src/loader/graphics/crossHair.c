@@ -159,7 +159,7 @@ void initCrossHairs()
 
     if (!real_glDrawArrays)
 #ifdef __linux__
-        real_glDrawArrays = (__stdcall void (*)(GLenum, GLint, GLsizei))dlsym(RTLD_NEXT, "glDrawArrays");
+        real_glDrawArrays = dlsym(RTLD_NEXT, "glDrawArrays");
 #else
         real_glDrawArrays = (__stdcall void (*)(GLenum, GLint, GLsizei))SDL_GL_GetProcAddress("glDrawArrays");
 #endif
@@ -246,6 +246,9 @@ void updateCrosshairPosition(int player, float normX, float normY)
 
 void renderCrosshairs(void)
 {
+    if (gId == GHOST_SQUAD_EVOLUTION_SBNJ)
+        return;
+
     if (gId == PRIMEVAL_HUNT_SBPP)
         glad_glViewport(phX, phY, phW, phH);
     else if (gGrp == GROUP_HOD4_SP)
@@ -253,9 +256,6 @@ void renderCrosshairs(void)
 
     GLint texFormat = 0;
     glad_glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &texFormat);
-
-    if (texFormat == 0x1908 && gId == GHOST_SQUAD_EVOLUTION_SBNJ)
-        return;
 
     GLint last_program, last_vao, last_vbo, last_active_texture, last_depth_func;
     GLboolean last_blend_enabled, last_depth_enabled; //, last_srgb_enabled;
@@ -373,11 +373,11 @@ void renderGsEvoCrosshairs(void)
     GLint texFormat = 0;
     glad_glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &texFormat);
 
-    if (texFormat == 0x1908 && gId == GHOST_SQUAD_EVOLUTION_SBNJ)
+    if (texFormat == 0x1908 || texFormat == 0x1)
         return;
 
     glad_glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glad_glDisable(GL_DEPTH_TEST); // for HOD4
+    // glad_glDisable(GL_DEPTH_TEST); // for HOD4
     glad_glDepthMask(GL_FALSE);
     glad_glEnable(GL_TEXTURE_2D);
     glad_glEnable(GL_BLEND);
@@ -429,7 +429,6 @@ void destroyCrosshairs(void)
 #undef glDrawArrays
 void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 {
-    void (*_glDrawArrays)(GLenum, GLint, GLsizei) = dlsym(RTLD_NEXT, "glDrawArrays");
 #else
 void bridgeglDrawArrays(GLenum mode, GLint first, GLsizei count)
 {
@@ -441,10 +440,11 @@ void bridgeglDrawArrays(GLenum mode, GLint first, GLsizei count)
         glad_glGetIntegerv(GL_FRAMEBUFFER_BINDING_EXT, &currentFBO);
         renderGsEvoCrosshairs();
     }
+    if (!real_glDrawArrays)
 #ifdef __linux__
-    real_glDrawArrays = (__stdcall void (*)(GLenum, GLint, GLsizei))dlsym(RTLD_NEXT, "glDrawArrays");
+       real_glDrawArrays = dlsym(RTLD_NEXT, "glDrawArrays");
 #else
-    real_glDrawArrays = (__stdcall void (*)(GLenum, GLint, GLsizei))SDL_GL_GetProcAddress("glDrawArrays");
+       real_glDrawArrays = (__stdcall void (*)(GLenum, GLint, GLsizei))SDL_GL_GetProcAddress("glDrawArrays");
 #endif
     real_glDrawArrays(mode, first, count);
 }

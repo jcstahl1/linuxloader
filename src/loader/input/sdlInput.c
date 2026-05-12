@@ -18,7 +18,6 @@
 #include "../config/config.h"
 #include "../graphics/crossHair.h"
 #include "../hardware/lindbergh/forceFeedback.h"
-#include "gameControllerMappings.h"
 #include "../config/iniParser.h"
 #include "sdlInput.h"
 #include "../hardware/lindbergh/jvs.h"
@@ -50,13 +49,13 @@ char gPlayerGUIDs[MAX_PLAYERS + 1][33]; // +1 for SYSTEM, 33 for 32 chars + null
 bool gPlayerGUIDsDirty = false;         // Flag to check if we need to save the INI
 
 // Direct lookup tables for high-performance event handling
-ControlBinding gKeyBindings[SDL_SCANCODE_COUNT];
-ControlBinding gMouseButtonBindings[MAX_MOUSE_BUTTONS];
+BindingPair gKeyBindings[SDL_SCANCODE_COUNT];
+BindingPair gMouseButtonBindings[MAX_MOUSE_BUTTONS];
 ControlBinding gMouseAxisBindings[2]; // 0=X, 1=Y
 BindingPair gJoyAxisBindings[MAX_JOYSTICKS][MAX_JOY_AXES];
-ControlBinding gJoyButtonBindings[MAX_JOYSTICKS][MAX_JOY_BUTTONS];
+BindingPair gJoyButtonBindings[MAX_JOYSTICKS][MAX_JOY_BUTTONS];
 BindingPair gControllerAxisBindings[MAX_JOYSTICKS][SDL_GAMEPAD_AXIS_COUNT];
-ControlBinding gControllerButtonBindings[MAX_JOYSTICKS][SDL_GAMEPAD_BUTTON_COUNT];
+BindingPair gControllerButtonBindings[MAX_JOYSTICKS][SDL_GAMEPAD_BUTTON_COUNT];
 HatBinding gJoyHatBindings[MAX_JOYSTICKS][MAX_JOY_HATS];
 bool gTriggerInsertKey = false;
 
@@ -209,9 +208,6 @@ int initSdlInput(const char *controlsPath)
     // Initialize GameController subsystem
     if (!SDL_Init(SDL_INIT_GAMEPAD))
         log_warn("Could not initialize SDL_GameController: %s\n", SDL_GetError());
-
-    // Loads the built-in database of controller
-    loadSDLControllerMappings();
 
     // Load official and community-sourced controller mappings from a database file.
     char *envDbPath = getenv("LINDBERGH_CONTROLS_DB_PATH");
@@ -661,44 +657,58 @@ void addBinding(ControlBinding binding)
     char name1[128], name2[128];
     char inputName[64] = "Unknown";
 
-    // Handle non-axis types first, as they only allow one binding per input.
+    // Handle non-axis types: buttons, keys, mouse buttons.
+    // These now use BindingPair to allow a combo and a standalone binding on the same physical input.
     if (binding.type != INPUT_TYPE_JOY_AXIS && binding.type != INPUT_TYPE_GAMEPAD_AXIS)
     {
-        ControlBinding *existing = NULL;
+        BindingPair *pair = NULL;
         switch (binding.type)
         {
             case INPUT_TYPE_KEY:
                 if (binding.sdlId < SDL_SCANCODE_COUNT)
                 {
-                    existing = &gKeyBindings[binding.sdlId];
+                    pair = &gKeyBindings[binding.sdlId];
                     snprintf(inputName, sizeof(inputName), "KEY_%s", SDL_GetScancodeName((SDL_Scancode)binding.sdlId));
                 }
                 break;
             case INPUT_TYPE_MOUSE_BUTTON:
                 if (binding.sdlId < MAX_MOUSE_BUTTONS)
                 {
-                    existing = &gMouseButtonBindings[binding.sdlId];
+                    pair = &gMouseButtonBindings[binding.sdlId];
                     snprintf(inputName, sizeof(inputName), "MOUSE_BUTTON_%d", binding.sdlId);
                 }
                 break;
             case INPUT_TYPE_MOUSE_AXIS:
                 if (binding.sdlId < 2)
                 {
-                    existing = &gMouseAxisBindings[binding.sdlId];
+                    // Mouse axes are special — keep single binding behavior
+                    ControlBinding *existing = &gMouseAxisBindings[binding.sdlId];
                     snprintf(inputName, sizeof(inputName), "MOUSE_AXIS_%d", binding.sdlId);
+                    if (existing->type != INPUT_TYPE_NONE && existing->action != binding.action)
+                    {
+                        getLogicalActionString(existing, name1, sizeof(name1), "");
+                        getLogicalActionString(&binding, name2, sizeof(name2), "");
+                        fprintf(stderr, "ERROR: Input assignment conflict for '%s'.\n", inputName);
+                        fprintf(stderr, "       It is mapped to both '%s' and '%s'. Please fix controls.ini.\n", name1, name2);
+                    }
+                    else
+                    {
+                        *existing = binding;
+                    }
+                    return;
                 }
                 break;
             case INPUT_TYPE_JOY_BUTTON:
                 if (binding.deviceIndex < MAX_JOYSTICKS && binding.sdlId < MAX_JOY_BUTTONS)
                 {
-                    existing = &gJoyButtonBindings[binding.deviceIndex][binding.sdlId];
+                    pair = &gJoyButtonBindings[binding.deviceIndex][binding.sdlId];
                     snprintf(inputName, sizeof(inputName), "JOY%d_BUTTON_%d", binding.deviceIndex, binding.sdlId);
                 }
                 break;
             case INPUT_TYPE_GAMEPAD_BUTTON:
                 if (binding.deviceIndex < MAX_JOYSTICKS && binding.sdlId < SDL_GAMEPAD_BUTTON_COUNT)
                 {
-                    existing = &gControllerButtonBindings[binding.deviceIndex][binding.sdlId];
+                    pair = &gControllerButtonBindings[binding.deviceIndex][binding.sdlId];
                     snprintf(inputName, sizeof(inputName), "GC%d_BUTTON_%s", binding.deviceIndex,
                              SDL_GetGamepadStringForButton((SDL_GamepadButton)binding.sdlId));
                 }
@@ -707,25 +717,29 @@ void addBinding(ControlBinding binding)
                 break;
         }
 
-        if (existing)
+        if (pair)
         {
-            if (existing->type != INPUT_TYPE_NONE && existing->action != binding.action)
+            if (pair->bindings[0].type == INPUT_TYPE_NONE)
             {
-                if (existing->comboGroupId != -1 || binding.comboGroupId != -1)
-                {
-                    // Suppress conflict error if it involves a combination
-                }
-                else
-                {
-                    getLogicalActionString(existing, name1, sizeof(name1), "");
-                    getLogicalActionString(&binding, name2, sizeof(name2), "");
-                    fprintf(stderr, "ERROR: Input assignment conflict for '%s'.\n", inputName);
-                    fprintf(stderr, "       It is mapped to both '%s' and '%s'. Please fix controls.ini.\n", name1, name2);
-                }
+                pair->bindings[0] = binding;
+            }
+            else if (pair->bindings[1].type == INPUT_TYPE_NONE)
+            {
+                pair->bindings[1] = binding;
+            }
+            else if (pair->bindings[0].action == binding.action && pair->bindings[0].player == binding.player)
+            {
+                pair->bindings[0] = binding;
+            }
+            else if (pair->bindings[1].action == binding.action && pair->bindings[1].player == binding.player)
+            {
+                pair->bindings[1] = binding;
             }
             else
             {
-                *existing = binding;
+                getLogicalActionString(&pair->bindings[0], name1, sizeof(name1), "");
+                getLogicalActionString(&binding, name2, sizeof(name2), "");
+                fprintf(stderr, "ERROR: Cannot bind more than two actions to '%s'. Please fix controls.ini.\n", inputName);
             }
         }
         return;
@@ -1497,26 +1511,35 @@ void processSdlEvent(const SDL_Event *e)
         case SDL_EVENT_KEY_DOWN:
         case SDL_EVENT_KEY_UP:
         {
-            ControlBinding *binding = &gKeyBindings[e->key.scancode];
-            if (binding->type != INPUT_TYPE_NONE)
+            log_debug("Key: %s, %d", SDL_GetScancodeName(e->key.scancode), e->key.scancode);
+            BindingPair *keyPair = &gKeyBindings[e->key.scancode];
+            for (int i = 0; i < 2; i++)
             {
-                bool isActive = (e->type == SDL_EVENT_KEY_DOWN);
-                updateBindingState(binding, isActive, isActive ? 1.0f : 0.0f);
+                ControlBinding *binding = &keyPair->bindings[i];
+                if (binding->type != INPUT_TYPE_NONE)
+                {
+                    bool isActive = (e->type == SDL_EVENT_KEY_DOWN);
+                    updateBindingState(binding, isActive, isActive ? 1.0f : 0.0f);
+                }
             }
         }
         break;
         case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
         case SDL_EVENT_JOYSTICK_BUTTON_UP:
         {
-            // printf("Joy Button: %d\n", e->jbutton.button);
-            int devIdx = getJoystickID(e->jbutton.which);
+            log_debug("Joy Button: %s, %d", SDL_GetJoystickNameForID(e->jdevice.which), e->jbutton.button);
+            int devIdx = getJoystickID(e->jdevice.which);
             if (devIdx != -1 && e->jbutton.button < MAX_JOY_BUTTONS)
             {
-                ControlBinding *binding = &gJoyButtonBindings[devIdx][e->jbutton.button];
-                if (binding->type != INPUT_TYPE_NONE)
+                BindingPair *joyBtnPair = &gJoyButtonBindings[devIdx][e->jbutton.button];
+                for (int i = 0; i < 2; i++)
                 {
-                    bool is_active = (e->type == SDL_EVENT_JOYSTICK_BUTTON_DOWN);
-                    updateBindingState(binding, is_active, is_active ? 1.0f : 0.0f);
+                    ControlBinding *binding = &joyBtnPair->bindings[i];
+                    if (binding->type != INPUT_TYPE_NONE)
+                    {
+                        bool is_active = (e->type == SDL_EVENT_JOYSTICK_BUTTON_DOWN);
+                        updateBindingState(binding, is_active, is_active ? 1.0f : 0.0f);
+                    }
                 }
             }
         }
@@ -1524,15 +1547,19 @@ void processSdlEvent(const SDL_Event *e)
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
         case SDL_EVENT_GAMEPAD_BUTTON_UP:
         {
-            // printf("GC Button: %s\n", SDL_GameControllerGetStringForButton(e->cbutton.button));
+            log_debug("GC Button: %s, %d, %d", SDL_GetGamepadStringForButton(e->gbutton.button), e->gbutton.button, e->gbutton.which);
             int devIdx = getControllerID(e->gbutton.which);
             if (devIdx != -1 && e->gbutton.button < SDL_GAMEPAD_BUTTON_COUNT)
             {
-                ControlBinding *binding = &gControllerButtonBindings[devIdx][e->gbutton.button];
-                if (binding->type != INPUT_TYPE_NONE)
+                BindingPair *gcBtnPair = &gControllerButtonBindings[devIdx][e->gbutton.button];
+                for (int i = 0; i < 2; i++)
                 {
-                    bool is_active = (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
-                    updateBindingState(binding, is_active, is_active ? 1.0f : 0.0f);
+                    ControlBinding *binding = &gcBtnPair->bindings[i];
+                    if (binding->type != INPUT_TYPE_NONE)
+                    {
+                        bool is_active = (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
+                        updateBindingState(binding, is_active, is_active ? 1.0f : 0.0f);
+                    }
                 }
             }
         }
@@ -1729,36 +1756,40 @@ void processSdlEvent(const SDL_Event *e)
         {
             if (e->button.button < MAX_MOUSE_BUTTONS)
             {
-                ControlBinding *binding = &gMouseButtonBindings[e->button.button];
-                if (binding->type != INPUT_TYPE_NONE)
+                BindingPair *mouseBtnPair = &gMouseButtonBindings[e->button.button];
+                for (int mi = 0; mi < 2; mi++)
                 {
-                    bool isActive = (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN);
-                    updateBindingState(binding, isActive, isActive ? 1.0f : 0.0f);
-                    // Special behavior for shooting games requiring explicit mouse clicks
-                    int x, y;
-                    if (gId == PRIMEVAL_HUNT_SBPP && getConfig()->emulateTouchscreen &&
-                        phIsInsideTouchScreen(e->motion.x, e->motion.y, &x, &y))
+                    ControlBinding *binding = &mouseBtnPair->bindings[mi];
+                    if (binding->type != INPUT_TYPE_NONE)
                     {
-                        phTouchClick(x, y, e->type);
-                        phIsDragging = isActive;
-                    }
-                    else
-                    {
-                        if (e->button.button == SDL_BUTTON_RIGHT &&
-                            (gId == RAMBO_SBQL || gId == RAMBO_SBSS_CHINA || gId == TOO_SPICY_SBMV) && isActive)
+                        bool isActive = (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN);
+                        updateBindingState(binding, isActive, isActive ? 1.0f : 0.0f);
+                        // Special behavior for shooting games requiring explicit mouse clicks
+                        int x, y;
+                        if (gId == PRIMEVAL_HUNT_SBPP && getConfig()->emulateTouchscreen &&
+                            phIsInsideTouchScreen(e->motion.x, e->motion.y, &x, &y))
                         {
-                            ActionState *state = &gActionStates[binding->player][LA_GunX];
-                            state->analogValue = -1;
-                            addActionToDirtyList(binding->player, LA_GunX);
-                            state = &gActionStates[binding->player][LA_GunY];
-                            state->analogValue = -1;
-                            addActionToDirtyList(binding->player, LA_GunY);
-                            gActionStates[binding->player][LA_Reload].isActive = isActive;
-                            addActionToDirtyList(binding->player, LA_Reload);
+                            phTouchClick(x, y, e->type);
+                            phIsDragging = isActive;
                         }
                         else
                         {
-                            addActionToDirtyList(binding->player, binding->action);
+                            if (e->button.button == SDL_BUTTON_RIGHT &&
+                                (gId == RAMBO_SBQL || gId == RAMBO_SBSS_CHINA || gId == TOO_SPICY_SBMV) && isActive)
+                            {
+                                ActionState *state = &gActionStates[binding->player][LA_GunX];
+                                state->analogValue = -1;
+                                addActionToDirtyList(binding->player, LA_GunX);
+                                state = &gActionStates[binding->player][LA_GunY];
+                                state->analogValue = -1;
+                                addActionToDirtyList(binding->player, LA_GunY);
+                                gActionStates[binding->player][LA_Reload].isActive = isActive;
+                                addActionToDirtyList(binding->player, LA_Reload);
+                            }
+                            else
+                            {
+                                addActionToDirtyList(binding->player, binding->action);
+                            }
                         }
                     }
                 }

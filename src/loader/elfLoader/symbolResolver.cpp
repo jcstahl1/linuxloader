@@ -128,15 +128,14 @@ SymbolResolver::SymbolResolver()
     m_VTables["strcat"] = reinterpret_cast<void *>(strcat);
     m_VTables["strpbrk"] = reinterpret_cast<void *>(strpbrk);
     m_VTables["strcspn"] = reinterpret_cast<void *>(strcspn);
-    m_VTables["strspn"] = reinterpret_cast<void *>(strspn);   
+    m_VTables["strspn"] = reinterpret_cast<void *>(strspn);
     m_VTables["strcasecmp"] = reinterpret_cast<void *>(strcasecmp);
     m_VTables["strncasecmp"] = reinterpret_cast<void *>(strncasecmp);
-    
+
     m_VTables["mblen"] = reinterpret_cast<void *>(mblen); // mblen is multi-byte character length, doesn't use wchar_t
     m_VTables["putc"] = reinterpret_cast<void *>(putc);
     m_VTables["putchar"] = reinterpret_cast<void *>(putchar);
     m_VTables["fputc"] = reinterpret_cast<void *>(fputc);
-
 }
 
 void SymbolResolver::InitSearchPaths(const std::string &libraryPathParam, const std::string &gameElfPath)
@@ -434,8 +433,7 @@ void *SymbolResolver::ResolveSymbol(const std::string &symbolName, std::string *
         return (void *)&LibcBridge::bridgeStubSuccess;
     }
 
-    if (strncmp(symbolName.c_str(), "_Unwind_", 8) == 0 ||
-        symbolName == "__gxx_personality_v0")
+    if (strncmp(symbolName.c_str(), "_Unwind_", 8) == 0 || symbolName == "__gxx_personality_v0")
     {
         HMODULE hMinGwGcc = GetModuleHandleA("libgcc_s_dw2-1.dll");
         if (hMinGwGcc)

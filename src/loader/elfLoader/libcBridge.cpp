@@ -147,7 +147,7 @@ namespace LibcBridge
         MAP("getenv", sharedGetenv);
         MAP("setenv", sharedSetenv);
         MAP("unsetenv", sharedUnsetenv);
-        
+
         MAP("syslog", bridgeSyslog);
         MAP("openlog", bridgeOpenlog);
         MAP("closelog", bridgeCloselog);
@@ -169,7 +169,6 @@ namespace LibcBridge
         MAP("popen", bridgePopen);
         MAP("pclose", bridgePclose);
         MAP("perror", bridgePerror);
-
 
         MAP("isinf", bridgeIsinf);
         MAP("isnan", bridgeIsnan);
@@ -195,7 +194,6 @@ namespace LibcBridge
         MAP("dlerror", sharedDlerror);
 
         MAP("kswap_collect", sharedKswap_collect);
-
 
         // Wide char string functions
         MAP("wmemcmp", bridgeWmemcmp);
@@ -649,11 +647,11 @@ namespace LibcBridge
         // Convert Windows FILETIME to seconds since epoch
         ULARGE_INTEGER uli;
         uli.QuadPart = ((unsigned __int64)tv->tv_sec * 10000000 + (unsigned __int64)tv->tv_usec * 10) + 116444736000000000ULL;
-        
+
         FILETIME ft;
         ft.dwLowDateTime = uli.LowPart;
         ft.dwHighDateTime = uli.HighPart;
-        
+
         SYSTEMTIME st;
         if (FileTimeToSystemTime(&ft, &st))
         {
@@ -856,11 +854,12 @@ namespace LibcBridge
     int bridgeWaitpid(int pid, int *wstatus, int options)
     {
         log_info("Intercepted waitpid(%d, %p, %d)", pid, wstatus, options);
-        // For now, just return a dummy status.
+        // For now, we just return a dummy status.
         // In a real implementation, you might want to hook into the Windows process
         // management to get the actual exit status.
-        if (wstatus) *wstatus = 0; // 0 indicates normal termination
-        return pid; // Return the PID as if it terminated normally
+        if (wstatus)
+            *wstatus = 0; // 0 indicates normal termination
+        return pid;       // Return the PID as if it terminated normally
     }
 
     pid_t bridgeGetuid(void)
@@ -911,7 +910,7 @@ namespace LibcBridge
             case 2: // SIGINT
                 win_sig = SIGINT;
                 break;
-            case 5: // SIGTRAP
+            case 5:                // SIGTRAP
                 win_sig = SIGABRT; // Map to SIGABRT as Windows lacks SIGTRAP
                 break;
             case 15: // SIGTERM
@@ -996,7 +995,7 @@ namespace LibcBridge
             case 2: // SIGINT
                 win_sig = SIGINT;
                 break;
-            case 5: // SIGTRAP
+            case 5:                // SIGTRAP
                 win_sig = SIGABRT; // Map to SIGABRT
                 break;
             case 15: // SIGTERM
@@ -1024,7 +1023,8 @@ namespace LibcBridge
         if (act)
         {
             old_handler = signal(win_sig, act->sa_handler);
-            if (old_handler == SIG_ERR) return -1;
+            if (old_handler == SIG_ERR)
+                return -1;
         }
         else if (oldact)
         {
@@ -1135,225 +1135,367 @@ namespace LibcBridge
         return 0;
     }
 
-    int bridgeWmemcmp(const uint32_t *s1, const uint32_t *s2, size_t n) {
-        for (size_t i = 0; i < n; i++) {
-            if (s1[i] < s2[i]) return -1;
-            if (s1[i] > s2[i]) return 1;
+    int bridgeWmemcmp(const uint32_t *s1, const uint32_t *s2, size_t n)
+    {
+        for (size_t i = 0; i < n; i++)
+        {
+            if (s1[i] < s2[i])
+                return -1;
+            if (s1[i] > s2[i])
+                return 1;
         }
         return 0;
     }
 
-    uint32_t *bridgeWmemcpy(uint32_t *dest, const uint32_t *src, size_t n) {
-        for (size_t i = 0; i < n; i++) dest[i] = src[i];
+    uint32_t *bridgeWmemcpy(uint32_t *dest, const uint32_t *src, size_t n)
+    {
+        for (size_t i = 0; i < n; i++)
+            dest[i] = src[i];
         return dest;
     }
 
-    uint32_t *bridgeWmemset(uint32_t *s, uint32_t c, size_t n) {
-        for (size_t i = 0; i < n; i++) s[i] = c;
+    uint32_t *bridgeWmemset(uint32_t *s, uint32_t c, size_t n)
+    {
+        for (size_t i = 0; i < n; i++)
+            s[i] = c;
         return s;
     }
 
-    uint32_t *bridgeWmemchr(const uint32_t *s, uint32_t c, size_t n) {
-        for (size_t i = 0; i < n; i++) {
-            if (s[i] == c) return (uint32_t*)(s + i);
+    uint32_t *bridgeWmemchr(const uint32_t *s, uint32_t c, size_t n)
+    {
+        for (size_t i = 0; i < n; i++)
+        {
+            if (s[i] == c)
+                return (uint32_t *)(s + i);
         }
         return nullptr;
     }
 
-    size_t bridgeWcslen(const uint32_t *s) {
+    size_t bridgeWcslen(const uint32_t *s)
+    {
         size_t len = 0;
-        while (s[len]) len++;
+        while (s[len])
+            len++;
         return len;
     }
 
-    uint32_t *bridgeWcscpy(uint32_t *dest, const uint32_t *src) {
+    uint32_t *bridgeWcscpy(uint32_t *dest, const uint32_t *src)
+    {
         size_t i = 0;
-        while ((dest[i] = src[i]) != 0) i++;
+        while ((dest[i] = src[i]) != 0)
+            i++;
         return dest;
     }
 
-    uint32_t *bridgeWcsncpy(uint32_t *dest, const uint32_t *src, size_t n) {
+    uint32_t *bridgeWcsncpy(uint32_t *dest, const uint32_t *src, size_t n)
+    {
         size_t i;
-        for (i = 0; i < n && src[i] != 0; i++) dest[i] = src[i];
-        for ( ; i < n; i++) dest[i] = 0;
+        for (i = 0; i < n && src[i] != 0; i++)
+            dest[i] = src[i];
+        for (; i < n; i++)
+            dest[i] = 0;
         return dest;
     }
 
-    int bridgeWcscmp(const uint32_t *s1, const uint32_t *s2) {
-        while (*s1 && (*s1 == *s2)) {
-            s1++; s2++;
+    int bridgeWcscmp(const uint32_t *s1, const uint32_t *s2)
+    {
+        while (*s1 && (*s1 == *s2))
+        {
+            s1++;
+            s2++;
         }
         return (*s1 > *s2) - (*s1 < *s2);
     }
 
-    int bridgeWcscoll(const uint32_t *s1, const uint32_t *s2) {
+    int bridgeWcscoll(const uint32_t *s1, const uint32_t *s2)
+    {
         return bridgeWcscmp(s1, s2); // Basic fallback
     }
 
-    int bridgeWcsncmp(const uint32_t *s1, const uint32_t *s2, size_t n) {
-        if (n == 0) return 0;
-        do {
-            if (*s1 != *s2++) return (*s1 > *--s2) - (*s1 < *s2);
-            if (*s1++ == 0) break;
-        } while (--n != 0);
+    int bridgeWcsncmp(const uint32_t *s1, const uint32_t *s2, size_t n)
+    {
+        for (size_t i = 0; i < n; i++)
+        {
+            if (s1[i] != s2[i])
+                return (s1[i] > s2[i]) - (s1[i] < s2[i]);
+            if (s1[i] == 0)
+                break;
+        }
         return 0;
     }
 
-    uint32_t *bridgeWcschr(const uint32_t *s, uint32_t c) {
-        while (*s != c) {
-            if (!*s++) return nullptr;
+    uint32_t *bridgeWcschr(const uint32_t *s, uint32_t c)
+    {
+        while (*s != c)
+        {
+            if (!*s++)
+                return nullptr;
         }
         return (uint32_t *)s;
     }
 
-    uint32_t *bridgeWcsrchr(const uint32_t *s, uint32_t c) {
+    uint32_t *bridgeWcsrchr(const uint32_t *s, uint32_t c)
+    {
         const uint32_t *last = nullptr;
-        do {
-            if (*s == c) last = s;
+        do
+        {
+            if (*s == c)
+                last = s;
         } while (*s++);
         return (uint32_t *)last;
     }
 
-    uint32_t *bridgeWcsstr(const uint32_t *haystack, const uint32_t *needle) {
-        if (!*needle) return (uint32_t *)haystack;
-        for (; *haystack; haystack++) {
-            if (*haystack == *needle) {
+    uint32_t *bridgeWcsstr(const uint32_t *haystack, const uint32_t *needle)
+    {
+        if (!*needle)
+            return (uint32_t *)haystack;
+        for (; *haystack; haystack++)
+        {
+            if (*haystack == *needle)
+            {
                 const uint32_t *h = haystack, *n = needle;
-                while (*h && *n && *h == *n) { h++; n++; }
-                if (!*n) return (uint32_t *)haystack;
+                while (*h && *n && *h == *n)
+                {
+                    h++;
+                    n++;
+                }
+                if (!*n)
+                    return (uint32_t *)haystack;
             }
         }
         return nullptr;
     }
 
-    double bridgeWcstod(const uint32_t *nptr, uint32_t **endptr) {
+    double bridgeWcstod(const uint32_t *nptr, uint32_t **endptr)
+    {
         char buf[256];
         size_t i = 0;
-        while (nptr[i] && i < 255) { buf[i] = (char)nptr[i]; i++; }
+        while (nptr[i] && i < 255)
+        {
+            buf[i] = (char)nptr[i];
+            i++;
+        }
         buf[i] = 0;
         char *end = nullptr;
         double res = strtod(buf, &end);
-        if (endptr) *endptr = (uint32_t *)(nptr + (end - buf));
+        if (endptr)
+            *endptr = (uint32_t *)(nptr + (end - buf));
         return res;
     }
 
-    long bridgeWcstol(const uint32_t *nptr, uint32_t **endptr, int base) {
+    long bridgeWcstol(const uint32_t *nptr, uint32_t **endptr, int base)
+    {
         char buf[256];
         size_t i = 0;
-        while (nptr[i] && i < 255) { buf[i] = (char)nptr[i]; i++; }
+        while (nptr[i] && i < 255)
+        {
+            buf[i] = (char)nptr[i];
+            i++;
+        }
         buf[i] = 0;
         char *end = nullptr;
         long res = strtol(buf, &end, base);
-        if (endptr) *endptr = (uint32_t *)(nptr + (end - buf));
+        if (endptr)
+            *endptr = (uint32_t *)(nptr + (end - buf));
         return res;
     }
 
-    int bridgeWctob(uint32_t c) {
+    int bridgeWctob(uint32_t c)
+    {
         return (c < 128) ? (int)c : -1;
     }
 
-    uint32_t bridgeWctype(const char *property) {
+    uint32_t bridgeWctype(const char *property)
+    {
         return (uint32_t)wctype(property);
     }
 
-    size_t bridgeWcsrtombs(char *dst, const uint32_t **src, size_t len, void *ps) {
-        if (!src || !*src) return (size_t)-1;
+    size_t bridgeWcsrtombs(char *dst, const uint32_t **src, size_t len, void *ps)
+    {
+        if (!src || !*src)
+            return (size_t)-1;
         const uint32_t *s = *src;
         size_t count = 0;
-        if (!dst) {
-            while (*s) { count++; s++; }
+        if (!dst)
+        {
+            while (*s)
+            {
+                if (*s > 255)
+                {
+                    errno = EILSEQ;
+                    return (size_t)-1;
+                }
+                count++;
+                s++;
+            }
             return count;
         }
-        while (count < len) {
-            if (*s == 0) { dst[count] = 0; *src = nullptr; return count; }
-            if (*s > 255) { errno = EILSEQ; return (size_t)-1; }
+        while (count < len)
+        {
+            if (*s == 0)
+            {
+                dst[count] = 0;
+                *src = nullptr;
+                return count;
+            }
+            if (*s > 255)
+            {
+                errno = EILSEQ;
+                return (size_t)-1;
+            }
             dst[count++] = (char)*s++;
         }
         *src = s;
         return count;
     }
 
-    size_t bridgeWcrtomb(char *s, uint32_t wc, void *ps) {
-        if (!s) return 1;
-        if (wc > 255) { errno = EILSEQ; return (size_t)-1; }
+    size_t bridgeWcrtomb(char *s, uint32_t wc, void *ps)
+    {
+        if (!s)
+            return 1;
+        if (wc > 255)
+        {
+            errno = EILSEQ;
+            return (size_t)-1;
+        }
         *s = (char)wc;
         return 1;
     }
 
-    size_t bridgeWcsftime(uint32_t *s, size_t maxsize, const uint32_t *format, const struct tm *timeptr) {
+    size_t bridgeWcsftime(uint32_t *s, size_t maxsize, const uint32_t *format, const struct tm *timeptr)
+    {
         char fmt[256];
         char out[256];
         size_t i = 0;
-        while (format[i] && i < 255) { fmt[i] = (char)format[i]; i++; }
+        while (format[i] && i < 255)
+        {
+            fmt[i] = (char)format[i];
+            i++;
+        }
         fmt[i] = 0;
-        size_t res = strftime(out, maxsize, fmt, timeptr);
-        for (i = 0; i < res; i++) s[i] = (uint32_t)out[i];
-        if (maxsize > res) s[res] = 0;
+        size_t cap = (maxsize < 256) ? maxsize : 256;
+        size_t res = strftime(out, cap, fmt, timeptr);
+        for (i = 0; i < res; i++)
+            s[i] = (uint32_t)out[i];
+        if (maxsize > res)
+            s[res] = 0;
         return res;
     }
 
-    size_t bridgeWcsxfrm(uint32_t *dst, const uint32_t *src, size_t n) {
+    size_t bridgeWcsxfrm(uint32_t *dst, const uint32_t *src, size_t n)
+    {
         size_t i = 0;
-        while (src[i] && i < n) { if (dst) dst[i] = src[i]; i++; }
-        if (dst && i < n) dst[i] = 0;
+        while (src[i] && i < n)
+        {
+            if (dst)
+                dst[i] = src[i];
+            i++;
+        }
+        if (dst && i < n)
+            dst[i] = 0;
         return bridgeWcslen(src);
     }
 
-    size_t bridgeWcstombs(char *dst, const uint32_t *src, size_t len) {
+    size_t bridgeWcstombs(char *dst, const uint32_t *src, size_t len)
+    {
+        log_trace("Intercepted wcstombs(dst=%p, src=%p, len=%zu)", dst, src, len);
+        if (!src)
+        {
+            errno = EILSEQ;
+            return (size_t)-1;
+        }
         size_t count = 0;
-        if (!dst) {
-            while (src[count]) count++;
+        if (!dst)
+        {
+            // Count only: determine how many bytes would be written
+            while (src[count])
+            {
+                if (src[count] > 255)
+                {
+                    errno = EILSEQ;
+                    return (size_t)-1;
+                }
+                count++;
+            }
             return count;
         }
-        while (count < len && src[count]) {
-            if (src[count] > 255) return (size_t)-1;
+        while (count < len && src[count])
+        {
+            if (src[count] > 255)
+            {
+                errno = EILSEQ;
+                return (size_t)-1;
+            }
             dst[count] = (char)src[count];
             count++;
         }
-        if (count < len) dst[count] = 0;
+        if (count < len)
+            dst[count] = 0;
         return count;
     }
 
-    size_t bridgeMbrtowc(uint32_t *pwc, const char *s, size_t n, void *ps) {
-        if (!s) return 0;
-        if (n == 0) return (size_t)-2;
-        if (pwc) *pwc = (uint32_t)(unsigned char)*s;
+    size_t bridgeMbrtowc(uint32_t *pwc, const char *s, size_t n, void *ps)
+    {
+        if (!s)
+            return 0;
+        if (n == 0)
+            return (size_t)-2;
+        if (pwc)
+            *pwc = (uint32_t)(unsigned char)*s;
         return (*s == 0) ? 0 : 1;
     }
 
-    int bridgeMbtowc(uint32_t *pwc, const char *s, size_t n) {
-        if (!s) return 0;
-        if (n == 0) return -1;
-        if (pwc) *pwc = (uint32_t)(unsigned char)*s;
+    int bridgeMbtowc(uint32_t *pwc, const char *s, size_t n)
+    {
+        if (!s)
+            return 0;
+        if (n == 0)
+            return -1;
+        if (pwc)
+            *pwc = (uint32_t)(unsigned char)*s;
         return (*s == 0) ? 0 : 1;
     }
 
-    size_t bridgeMbstowcs(uint32_t *dest, const char *src, size_t n) {
+    size_t bridgeMbstowcs(uint32_t *dest, const char *src, size_t n)
+    {
+        if (!src)
+        {
+            errno = EILSEQ;
+            return (size_t)-1;
+        }
         size_t i = 0;
-        if (!dest) return strlen(src);
-        for (; i < n && src[i]; i++) {
+        if (!dest)
+            return strlen(src);
+        for (; i < n && src[i]; i++)
+        {
             dest[i] = (uint32_t)(unsigned char)src[i];
         }
-        if (i < n) dest[i] = 0;
+        if (i < n)
+            dest[i] = 0;
         return i;
     }
 
-    uint32_t bridgeBtowc(int c) {
-        if (c == EOF) return (uint32_t)-1;
+    uint32_t bridgeBtowc(int c)
+    {
+        if (c == EOF)
+            return (uint32_t)-1;
         return (uint32_t)(unsigned char)c;
     }
 
-    uint32_t bridgePutwc(uint32_t wc, FILE *stream) {
+    uint32_t bridgePutwc(uint32_t wc, FILE *stream)
+    {
         int r = fputc((int)(wc & 0xFF), stream);
         return (r == EOF) ? (uint32_t)-1 : wc;
     }
 
-    uint32_t bridgeGetwc(FILE *stream) {
+    uint32_t bridgeGetwc(FILE *stream)
+    {
         int c = fgetc(stream);
         return (c == EOF) ? (uint32_t)-1 : (uint32_t)c;
     }
 
-    uint32_t bridgeUngetwc(uint32_t wc, FILE *stream) {
+    uint32_t bridgeUngetwc(uint32_t wc, FILE *stream)
+    {
         int r = ungetc((int)(wc & 0xFF), stream);
         return (r == EOF) ? (uint32_t)-1 : wc;
     }
@@ -1396,7 +1538,6 @@ namespace LibcBridge
 
         return result;
     }
-
 
 } // namespace LibcBridge
 

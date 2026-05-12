@@ -39,6 +39,8 @@
 #include <direct.h>
 #include <winsock2.h>
 #include <iphlpapi.h>
+#include <fcntl.h>
+#include <io.h>
 #define REAL_FUNC(name) name
 #endif
 
@@ -83,16 +85,12 @@ void ConvertPath(char *dst, const char *src, size_t size)
 
 DIR *sharedOpendir(const char *dirname)
 {
-    log_debug("sharedOpendir %s\n", dirname);
+    log_debug("Opendir %s\n", dirname);
     DIR *(*_opendir)(const char *dirname) = REAL_FUNC(opendir);
 
     if (strcmp(dirname, "/tmp/") == 0 && gGrp == GROUP_ID5)
     {
-#ifdef __linux__
         return _opendir(dirname + 1);
-#else
-        return _opendir(".\\tmp");
-#endif
     }
 
     if (strcmp(getConfig()->idCardFolder, "") != 0 && strcmp(dirname, ".") == 0)
@@ -110,13 +108,8 @@ DIR *sharedOpendir(const char *dirname)
     }
 
     if (strcmp(dirname, "/home/disk1/rankingdata") == 0 && (gGrp == GROUP_OUTRUN || gGrp == GROUP_OUTRUN_TEST))
-    {
-#ifdef __linux__
         return _opendir("./rankingdata");
-#else
-        return _opendir(".\\rankingdata");
-#endif
-    }
+
     return _opendir(dirname);
 }
 
@@ -124,10 +117,31 @@ int sharedRemove(const char *path)
 {
     int (*_remove)(const char *path) = REAL_FUNC(remove);
 
-    if (strcmp(path, "/home/disk1/rankingdata/%s") == 0 && (gGrp == GROUP_OUTRUN || gGrp == GROUP_OUTRUN_TEST))
+    if (strncmp(path, "/home/disk1/rankingdata/", 24) == 0 && (gGrp == GROUP_OUTRUN || gGrp == GROUP_OUTRUN_TEST))
     {
-        return _remove("./rankingdata/%s");
+        path += 12;
+#ifdef _WIN32
+        char winPath[256];
+        ConvertPath(winPath, path, 256);
+        path = winPath;
+#endif
+        log_debug("Removing: %s", path);
+        return _remove(path);
     }
+
+    if (strncmp(path, "/tmp/", 5) == 0 && gGrp == GROUP_ID5)
+    {
+        path += 1;
+#ifdef _WIN32
+        char winPath[256];
+        ConvertPath(winPath, path, 256);
+        path = winPath;
+#endif
+        log_info("Removing: %s", path);
+        return _remove(path);
+    }
+
+    log_debug("Removing: %s", path);
     return _remove(path);
 }
 
@@ -151,11 +165,12 @@ int sharedMkdir(const char *path, mode_t mode)
 #endif
     }
 #ifdef __linux__
+    log_debug("Creating directory: %s", path);
     return _mkdir(path, mode);
 #else
     char winPath[MAX_PATH];
     ConvertPath(winPath, path, MAX_PATH);
-    log_info("Creating directory: %s", winPath);
+    log_debug("Creating directory: %s", winPath);
     return _mkdir(winPath);
 #endif
 }
@@ -170,6 +185,46 @@ int sharedXstat64(int ver, const char *path, struct stat64 *stat_buf)
         return ___xstat64(ver, "warning", stat_buf);
     }
     return ___xstat64(ver, path, stat_buf);
+}
+#endif
+
+#ifdef _WIN32
+static int translateOpenFlags(int flags)
+{
+    int winFlags = _O_BINARY;
+
+    // Access mode
+    int accMode = flags & O_ACCMODE; // O_ACCMODE is 0x3
+    if (accMode == 0)
+        winFlags |=  _O_RDONLY;
+    else if (accMode == 1)
+        winFlags |= _O_WRONLY;
+    else if (accMode == 2)
+        winFlags |= _O_RDWR;
+
+    // Flags mapping
+    if (flags & 0x40)
+        winFlags |= _O_CREAT;
+    if (flags & 0x80)
+        winFlags |= _O_EXCL;
+    if (flags & 0x200)
+        winFlags |= _O_TRUNC;
+    if (flags & 0x400)
+        winFlags |= _O_APPEND;
+    if (flags & 0x80000)
+        winFlags |= _O_NOINHERIT;
+
+    return winFlags;
+}
+
+static int translateOpenMode(int mode)
+{
+    int winMode = 0;
+    if (mode & 0400)
+        winMode |= _S_IREAD;
+    if (mode & 0200)
+        winMode |= _S_IWRITE;
+    return winMode;
 }
 #endif
 
@@ -240,18 +295,7 @@ int sharedOpen(const char *pathname, int flags, ...)
         pathname += 5;
 
     if (strncmp(pathname, "/tmp/", 5) == 0)
-    {
-        struct stat info;
-        if (!(stat("./tmp", &info) == 0 && (info.st_mode & S_IFDIR)))
-        {
-#ifdef __linux__
-            mkdir("tmp", 0777);
-#else
-            _mkdir("tmp");
-#endif
-        }
-        return _open(pathname + 1, flags, mode);
-    }
+        pathname += 1;
 
     if (strcmp(pathname, "/proc/bus/pci/01/00.0") == 0)
     {
@@ -265,9 +309,17 @@ int sharedOpen(const char *pathname, int flags, ...)
 
     char winPath[MAX_PATH];
     ConvertPath(winPath, pathname, MAX_PATH);
-    return _open(winPath, flags, mode);
+
+    int winFlags = translateOpenFlags(flags);
+    int winMode = translateOpenMode(mode);
+
+    log_debug("Translating open flags: 0x%X -> 0x%X, mode: 0x%X -> 0x%X", flags, winFlags, mode, winMode);
+
+    log_debug("Opening %s", winPath);
+    return _open(winPath, winFlags, winMode);
 #endif
 
+    log_debug("Opening %s", pathname);
     return _open(pathname, flags, mode);
 }
 
@@ -283,7 +335,6 @@ int sharedOpen64(const char *pathname, int flags, ...)
 
 FILE *sharedFopen(const char *restrict pathname, const char *restrict mode)
 {
-    void *address = __builtin_return_address(0);
     FILE *(*_fopen)(const char *restrict pathname, const char *restrict mode) = REAL_FUNC(fopen);
 
     if (strcmp(pathname, "/proc/net/route") == 0)
@@ -503,15 +554,14 @@ FILE *sharedFopen(const char *restrict pathname, const char *restrict mode)
             phShowCursorInGame = true;
     }
 #ifdef __linux__
+    log_debug("fopen: %s with mode %s", pathname, mode);
     return _fopen(pathname, mode);
 #else
-    // return _fopen(winPath, mode);
-
-    log_trace("fopen: %s (as %s) with mode %s at %p", pathname, winPath, mode, address);
+    log_debug("fopen: %s (as %s) with mode %s", pathname, winPath, mode);
     FILE *f = _fopen(winPath, mode);
     if (!f)
     {
-        log_error("fopen failed: %s (as %s) with mode %s at %p", pathname, winPath, mode, address);
+        log_error("fopen failed: %s (as %s) with mode %s", pathname, winPath, mode);
     }
     return f;
 #endif
@@ -613,6 +663,7 @@ FILE *sharedFopen64(const char *pathname, const char *mode)
             }
     }
 
+    log_debug("fopen64: %s with mode %s", pathname, mode);
     return _fopen64(pathname, mode);
 }
 

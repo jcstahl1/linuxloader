@@ -9,12 +9,13 @@ uint32_t partialElfCrc = 0;
 
 int main(int argc, char *argv[])
 {
-    char command[MAX_PATH_LENGTH];
-    char originalDir[MAX_PATH_LENGTH];
-    char gameELF[MAX_PATH_LENGTH];
-    char libraryPath[MAX_PATH_LENGTH];
+    char command[MAX_PATH_LENGTH] = {0};
+    char originalDir[MAX_PATH_LENGTH] = {0};
+    char gameELF[MAX_PATH_LENGTH] = {0};
+    char libraryPath[MAX_PATH_LENGTH] = {0};
 
-    parseArgs(argc, argv, command, originalDir, gameELF, libraryPath);
+    if (parseArgs(argc, argv, command, originalDir, gameELF, libraryPath) != PARSE_ARGS_SUCCESS)
+        return EXIT_SUCCESS;
 
     log_info("Starting $ %s", command);
 

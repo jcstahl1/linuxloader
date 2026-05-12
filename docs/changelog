@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.4]
+### Added
+### Fixed
+    - Fixed Version number when running --version command.
+    - Fixed a few bugs in wide char functions that might prevent 2Spicy to start in some cases.
+    - Fixed Outrun Glare Effect setting being in the wrong category and not being applied.
+    - Removed built in gamecontrollerdb, the SDL3 default database will be used instead.
+    - Fixed a bug in sdlInput where if a mapping was assigned to a combo, it wouldn't work as a single mapping.
+    - Fixed a bug in ID5, where attract mode would crash when starting the demo race.
+    - Fixed a bug in linuxoader (linux) where if it was called without parameters and the folder didn't have any known game, it would crash.
+    - Fixed a bug in GSEvo where the custom crosshairs would have a black background.
+
 ## [3.0.3]
 ### Added
     - A config option to always enable crosshairs in Ghost Squad Evolution.

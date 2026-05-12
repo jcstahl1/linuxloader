@@ -182,7 +182,6 @@ extern "C"
     int bridgeClosedir(void *dirp);
 
     int bridgeUnlink(const char *pathname);
-    int bridgeRemove(const char *pathname);
     int bridgeRename(const char *oldpath, const char *newpath);
 
     int bridgeFstat(int fd, struct linux_stat64 *buf);

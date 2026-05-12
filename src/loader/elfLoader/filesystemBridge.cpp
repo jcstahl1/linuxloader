@@ -88,7 +88,7 @@ namespace FileSystemBridge
         MAP("clearerr", clearerr);
 
         MAP("unlink", bridgeUnlink);
-        MAP("remove", bridgeRemove);
+        MAP("remove", sharedRemove);
         MAP("rename", bridgeRename);
 
         MAP("stat", bridgeStat);
@@ -290,6 +290,10 @@ extern "C"
     void *bridgeOpendir(const char *name)
     {
         log_debug("opendir(\"%s\")", name);
+
+        if(strncmp(name, "/proc", 5) == 0)
+            return 0;
+            
         char winPath[MAX_PATH];
         ConvertPath(winPath, name, MAX_PATH);
 
@@ -297,6 +301,11 @@ extern "C"
             (getConfig()->gameGroup == GROUP_OUTRUN || getConfig()->gameGroup == GROUP_OUTRUN_TEST))
         {
             strcpy(winPath, ".\\rankingdata");
+        }
+
+        if(strcmp(winPath, "\\tmp\\") == 0)
+        {
+            strcpy(winPath, ".\\tmp\\");
         }
 
         std::string searchPath = winPath;
@@ -389,18 +398,6 @@ extern "C"
             pathname += 1;
         }
         return _unlink(pathname);
-    }
-
-    int bridgeRemove(const char *pathname)
-    {
-        if (strncmp(pathname, "/home/disk1/rankingdata/", 25) == 0)
-        {
-            pathname += 11;
-            char winPath[MAX_PATH];
-            ConvertPath(winPath, pathname, MAX_PATH);
-            return remove(winPath);
-        }
-        return remove(pathname);
     }
 
     int bridgeRename(const char *oldpath, const char *newpath)
