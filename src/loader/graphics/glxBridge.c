@@ -451,12 +451,12 @@ void bridgeGlxSwapBuffers(Display *dpy, GLXDrawable drawable)
     if (config->borderEnabled)
         drawGameBorder(config->width, config->height, config->whiteBorderPercentage, config->blackBorderPercentage);
 
-	drawBezelOverlay();
-
     if (p1CrossHairInitialized || p2CrossHairInitialized)
         renderCrosshairs();
 
     blitStretch();
+	
+	drawBezelOverlay();
 
     pollEvents();
 
