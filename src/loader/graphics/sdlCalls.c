@@ -22,6 +22,7 @@
 #include "../config/config.h"
 #include "crossHair.h"
 #include "customCursor.h"
+#include "bezel.h"
 #include "../input/sdlInput.h"
 #include "../hardware/lindbergh/jvs.h"
 #include "../resources/LiberationMono-Regular.h"
@@ -243,6 +244,8 @@ void startSDL()
     creatingWindow = false;
 
     printf("  RESOLUTION: %dx%d\n", gWidth, gHeight);
+
+	initBezelOverlay();
 
     loadCursors();
     if (customCursor)
