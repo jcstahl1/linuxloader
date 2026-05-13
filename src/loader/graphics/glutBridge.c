@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include "blitStretching.h"
 #include "border.h"
+#include "bezel.h"
 #include "../config/config.h"
 #include "crossHair.h"
 #include "fpsLimiter.h"
@@ -94,7 +95,9 @@ void bridgeGlutSwapBuffers(void)
     if (config->borderEnabled)
         drawGameBorder(drawableW, drawableH, config->whiteBorderPercentage, config->blackBorderPercentage);
 
-    SDL_GL_SwapWindow(g_SdlWindow);
+    drawBezelOverlay();
+	
+	SDL_GL_SwapWindow(g_SdlWindow);
 
     if (config->fpsLimiter)
         frameTiming();
