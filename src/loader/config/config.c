@@ -195,6 +195,8 @@ void setDefaultValues(EmulatorConfig *cfg)
     cfg->borderEnabled = 0;
     cfg->whiteBorderPercentage = 0.02f;
     cfg->blackBorderPercentage = 0.0f;
+	cfg->bezelEnabled = 0;
+	cfg->bezelPath[0] = '\0';
     cfg->inputMode = 1;
     cfg->enableCrosshairs = 0;
     cfg->gsevoCrosshairAlwaysOn = 0;
@@ -318,6 +320,8 @@ void applyIniConfig(EmulatorConfig *config, const IniConfig *ini)
 	config->whiteBorderPercentage = getFloat(ini, "Display", "WHITE_BORDER_PERCENTAGE", config->whiteBorderPercentage * 100.0f) / 100.0f;
 	config->blackBorderPercentage = getFloat(ini, "Display", "BLACK_BORDER_PERCENTAGE", config->blackBorderPercentage * 100.0f) / 100.0f;
     config->keepAspectRatio = getInt(ini, "Display", "KEEP_ASPECT_RATIO", config->keepAspectRatio);
+	config->bezelEnabled = getInt(ini, "Display", "BEZEL_ENABLED", config->bezelEnabled);
+	getString(ini, "Display", "BEZEL_PATH", config->bezelPath, MAX_PATH_LENGTH);
     config->hideCursor = getInt(ini, "Display", "HIDE_CURSOR", config->hideCursor);
 
     // [Input]
