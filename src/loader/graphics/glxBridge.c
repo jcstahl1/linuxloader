@@ -11,6 +11,7 @@
 #include "../elfLoader/glHooks.hpp"
 #include "../config/config.h"
 #include "border.h"
+#include "bezel.h"
 #include "crossHair.h"
 #include "blitStretching.h"
 #include "fpsLimiter.h"
@@ -449,6 +450,8 @@ void bridgeGlxSwapBuffers(Display *dpy, GLXDrawable drawable)
 
     if (config->borderEnabled)
         drawGameBorder(config->width, config->height, config->whiteBorderPercentage, config->blackBorderPercentage);
+
+	drawBezelOverlay();
 
     if (p1CrossHairInitialized || p2CrossHairInitialized)
         renderCrosshairs();
