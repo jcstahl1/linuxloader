@@ -137,6 +137,8 @@ static int loadBezelTexture(const char *filePath)
     glad_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glad_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+    GLint oldAlignment = 4;
+    glad_glGetIntegerv(GL_UNPACK_ALIGNMENT, &oldAlignment);
     glad_glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     glad_glTexImage2D(
@@ -151,9 +153,15 @@ static int loadBezelTexture(const char *filePath)
         bezelSurface->pixels
     );
 
+    glad_glPixelStorei(GL_UNPACK_ALIGNMENT, oldAlignment);
+
     glad_glBindTexture(GL_TEXTURE_2D, 0);
 
     printf("Loaded bezel image: %s (%dx%d)\n", filePath, bezelSurface->w, bezelSurface->h);
+
+    SDL_DestroySurface(bezelSurface);
+    bezelSurface = NULL;
+
     return 1;
 }
 
@@ -177,8 +185,7 @@ static int createBezelGeometry(void)
 
     glad_glBindVertexArray(bezelVao);
     glad_glBindBuffer(GL_ARRAY_BUFFER, bezelVbo);
-    glad_glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
+    glad_glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
     glad_glEnableVertexAttribArray(0);
     glad_glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)0);
 
