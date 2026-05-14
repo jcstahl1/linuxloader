@@ -96,8 +96,8 @@ void bridgeGlutSwapBuffers(void)
         drawGameBorder(drawableW, drawableH, config->whiteBorderPercentage, config->blackBorderPercentage);
 
     drawBezelOverlay();
-	
-	SDL_GL_SwapWindow(g_SdlWindow);
+
+    SDL_GL_SwapWindow(g_SdlWindow);
 
     if (config->fpsLimiter)
         frameTiming();
