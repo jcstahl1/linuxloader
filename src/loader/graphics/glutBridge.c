@@ -92,21 +92,12 @@ void bridgeGlutSwapBuffers(void)
 
     blitStretch();
 
-<<<<<<< HEAD
     if (config->borderEnabled && gId != GHOST_SQUAD_EVOLUTION_SBNJ)
         drawGameBorder(drawableW, drawableH, config->whiteBorderPercentage, config->blackBorderPercentage);
 
     drawBezelOverlay();
 
     SDL_GL_SwapWindow(g_SdlWindow);
-=======
-    if (config->borderEnabled)
-        drawGameBorder(drawableW, drawableH, config->whiteBorderPercentage, config->blackBorderPercentage);
-
-    drawBezelOverlay();
-	
-	SDL_GL_SwapWindow(g_SdlWindow);
->>>>>>> 561eb1f (Fix bezel overlay draw order)
 
     if (config->fpsLimiter)
         frameTiming();
