@@ -321,14 +321,6 @@ void drawBezelOverlay(void)
 	GLint posLoc = glad_glGetAttribLocation(bezelProgram, "a_pos");
 	GLint uvLoc = glad_glGetAttribLocation(bezelProgram, "a_uv");
 
-	static int printedBezelAttribs = 0;
-	if (!printedBezelAttribs)
-	{
-		printf("Bezel draw: posLoc=%d uvLoc=%d texture=%u program=%u vbo=%u size=%dx%d\n",
-			posLoc, uvLoc, bezelTexture, bezelProgram, bezelVbo, bezelW, bezelH);
-		printedBezelAttribs = 1;
-	}
-
 	if (posLoc >= 0 && uvLoc >= 0)
 	{
 		glad_glBindBuffer(GL_ARRAY_BUFFER, bezelVbo);
