@@ -453,13 +453,12 @@ void bridgeGlxSwapBuffers(Display *dpy, GLXDrawable drawable)
 
 	blitStretch();
 
-	if (config->borderEnabled)
-		drawGameBorder(config->width, config->height,
-					   config->whiteBorderPercentage, config->blackBorderPercentage);
-
 	pollEvents();
 	
 	drawBezelOverlay();
+	
+	if (config->borderEnabled && gId != GHOST_SQUAD_EVOLUTION_SBNJ)
+        drawGameBorder(drawableW, drawableH, config->whiteBorderPercentage, config->blackBorderPercentage);
 
 	SDL_GL_SwapWindow(getSDLWindow());
 

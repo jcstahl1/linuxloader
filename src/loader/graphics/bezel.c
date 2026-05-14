@@ -179,23 +179,16 @@ static int createBezelGeometry(void)
         0.0f, 1.0f, 0.0f, 1.0f
     };
 
-    glad_glGenVertexArrays(1, &bezelVao);
     glad_glGenBuffers(1, &bezelVbo);
 
-    if (!bezelVao || !bezelVbo)
+    if (!bezelVbo)
         return 0;
 
-    glad_glBindVertexArray(bezelVao);
     glad_glBindBuffer(GL_ARRAY_BUFFER, bezelVbo);
     glad_glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
-    glad_glEnableVertexAttribArray(0);
-    glad_glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)0);
-
-    glad_glEnableVertexAttribArray(1);
-    glad_glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float)));
-
     glad_glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glad_glBindVertexArray(0);
+
+    bezelVao = 0;
 
     return 1;
 }
@@ -227,7 +220,7 @@ void drawBezelOverlay(void)
     if (!cfg->bezelEnabled)
         return;
 
-    if (!bezelInitialized || bezelTexture == 0 || bezelProgram == 0 || bezelVao == 0)
+    if (!bezelInitialized || bezelTexture == 0 || bezelProgram == 0 || bezelVbo == 0)
         return;
 
     int bezelW = 0;
@@ -325,14 +318,49 @@ void drawBezelOverlay(void)
         0.0f, (float)bezelH, 0.0f, 1.0f
     };
 
-    glad_glBindVertexArray(bezelVao);
-    glad_glBindBuffer(GL_ARRAY_BUFFER, bezelVbo);
-    glad_glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+	GLint posLoc = glad_glGetAttribLocation(bezelProgram, "a_pos");
+	GLint uvLoc = glad_glGetAttribLocation(bezelProgram, "a_uv");
+
+	static int printedBezelAttribs = 0;
+	if (!printedBezelAttribs)
+	{
+		printf("Bezel draw: posLoc=%d uvLoc=%d texture=%u program=%u vbo=%u size=%dx%d\n",
+			posLoc, uvLoc, bezelTexture, bezelProgram, bezelVbo, bezelW, bezelH);
+		printedBezelAttribs = 1;
+	}
+
+	if (posLoc >= 0 && uvLoc >= 0)
+	{
+		glad_glBindBuffer(GL_ARRAY_BUFFER, bezelVbo);
+		glad_glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+
+		glad_glEnableVertexAttribArray((GLuint)posLoc);
+		glad_glVertexAttribPointer(
+			(GLuint)posLoc,
+			2,
+			GL_FLOAT,
+			GL_FALSE,
+			4 * sizeof(float),
+			(void *)0
+		);
+
+		glad_glEnableVertexAttribArray((GLuint)uvLoc);
+		glad_glVertexAttribPointer(
+			(GLuint)uvLoc,
+			2,
+			GL_FLOAT,
+			GL_FALSE,
+			4 * sizeof(float),
+			(void *)(2 * sizeof(float))
+	);
 
     glad_glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    glad_glBindBuffer(GL_ARRAY_BUFFER, oldArrayBuffer);
-    glad_glBindVertexArray((GLuint)oldVao);
+    glad_glDisableVertexAttribArray((GLuint)posLoc);
+    glad_glDisableVertexAttribArray((GLuint)uvLoc);
+}
+
+	glad_glBindBuffer(GL_ARRAY_BUFFER, oldArrayBuffer);
 
     glad_glBindTexture(GL_TEXTURE_2D, (GLuint)oldTexture);
     glad_glActiveTexture((GLenum)oldActiveTexture);
