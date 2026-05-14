@@ -2,12 +2,14 @@
 #include "../config/config.h"
 
 #include <SDL3/SDL_surface.h>
+#include <SDL3/SDL_video.h>
 #include <SDL3_image/SDL_image.h>
 #include <glad/gl.h>
 #include <stdio.h>
 
 extern int drawableW;
 extern int drawableH;
+extern SDL_Window *getSDLWindow(void);
 
 static SDL_Surface *bezelSurface = NULL;
 static GLuint bezelTexture = 0;
@@ -228,7 +230,20 @@ void drawBezelOverlay(void)
     if (!bezelInitialized || bezelTexture == 0 || bezelProgram == 0 || bezelVao == 0)
         return;
 
-    if (drawableW <= 0 || drawableH <= 0)
+    int bezelW = 0;
+    int bezelH = 0;
+    SDL_Window *window = getSDLWindow();
+
+    if (window)
+        SDL_GetWindowSizeInPixels(window, &bezelW, &bezelH);
+
+    if (bezelW <= 0 || bezelH <= 0)
+    {
+        bezelW = drawableW;
+        bezelH = drawableH;
+    }
+
+    if (bezelW <= 0 || bezelH <= 0)
         return;
 
     GLboolean blendWasEnabled = glad_glIsEnabled(GL_BLEND);
@@ -241,20 +256,22 @@ void drawBezelOverlay(void)
     GLboolean oldColorMask[4];
 
     GLint oldViewport[4];
-    GLint oldProgram = 0;
-    GLint oldActiveTexture = 0;
-    GLint oldTexture = 0;
-    GLint oldVao = 0;
-    GLint oldArrayBuffer = 0;
-    GLint oldBlendSrc = 0;
-    GLint oldBlendDst = 0;
-    GLint oldBlendEquation = 0;
+	GLint oldProgram = 0;
+	GLint oldActiveTexture = 0;
+	GLint oldTexture = 0;
+	GLint oldVao = 0;
+	GLint oldArrayBuffer = 0;
+	GLint oldFramebuffer = 0;
+	GLint oldBlendSrc = 0;
+	GLint oldBlendDst = 0;
+	GLint oldBlendEquation = 0;
 
     glad_glGetIntegerv(GL_VIEWPORT, oldViewport);
     glad_glGetIntegerv(GL_CURRENT_PROGRAM, &oldProgram);
     glad_glGetIntegerv(GL_ACTIVE_TEXTURE, &oldActiveTexture);
     glad_glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &oldVao);
     glad_glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &oldArrayBuffer);
+	glad_glGetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFramebuffer);
     glad_glGetIntegerv(GL_BLEND_SRC, &oldBlendSrc);
     glad_glGetIntegerv(GL_BLEND_DST, &oldBlendDst);
     glad_glGetIntegerv(GL_BLEND_EQUATION_RGB, &oldBlendEquation);
@@ -266,7 +283,8 @@ void drawBezelOverlay(void)
     glad_glDisable(GL_FRAGMENT_PROGRAM_ARB);
     glad_glDisable(GL_VERTEX_PROGRAM_ARB);
 
-    glad_glViewport(0, 0, drawableW, drawableH);
+    glad_glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glad_glViewport(0, 0, bezelW, bezelH);
     glad_glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
     glad_glDisable(GL_DEPTH_TEST);
@@ -288,8 +306,8 @@ void drawBezelOverlay(void)
     if (bezelProjectionLoc >= 0)
     {
         GLfloat projection[16] = {
-            2.0f / drawableW, 0.0f, 0.0f, 0.0f,
-            0.0f, -2.0f / drawableH, 0.0f, 0.0f,
+            2.0f / bezelW, 0.0f, 0.0f, 0.0f,
+            0.0f, -2.0f / bezelH, 0.0f, 0.0f,
             0.0f, 0.0f, -1.0f, 0.0f,
             -1.0f, 1.0f, 0.0f, 1.0f
         };
@@ -299,12 +317,12 @@ void drawBezelOverlay(void)
 
     float vertices[] = {
         0.0f, 0.0f, 0.0f, 0.0f,
-        (float)drawableW, 0.0f, 1.0f, 0.0f,
-        (float)drawableW, (float)drawableH, 1.0f, 1.0f,
+        (float)bezelW, 0.0f, 1.0f, 0.0f,
+        (float)bezelW, (float)bezelH, 1.0f, 1.0f,
 
         0.0f, 0.0f, 0.0f, 0.0f,
-        (float)drawableW, (float)drawableH, 1.0f, 1.0f,
-        0.0f, (float)drawableH, 0.0f, 1.0f
+        (float)bezelW, (float)bezelH, 1.0f, 1.0f,
+        0.0f, (float)bezelH, 0.0f, 1.0f
     };
 
     glad_glBindVertexArray(bezelVao);
@@ -320,7 +338,8 @@ void drawBezelOverlay(void)
     glad_glActiveTexture((GLenum)oldActiveTexture);
 
     glad_glUseProgram((GLuint)oldProgram);
-    glad_glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
+	glad_glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)oldFramebuffer);
+	glad_glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
 
     glad_glColorMask(
         oldColorMask[0],
