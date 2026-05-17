@@ -18,7 +18,19 @@ static GLuint bezelVao = 0;
 static GLuint bezelVbo = 0;
 static GLint bezelProjectionLoc = -1;
 static GLint bezelTextureLoc = -1;
+static GLint bezelOpacityLoc = -1;
 static int bezelInitialized = 0;
+
+typedef struct
+{
+    GLint enabled;
+    GLint size;
+    GLint stride;
+    GLint type;
+    GLint normalized;
+    GLint buffer;
+    void *pointer;
+} BezelAttribState;
 
 static const char *bezelVertexShaderSource =
     "#version 120\n"
@@ -35,11 +47,36 @@ static const char *bezelVertexShaderSource =
 static const char *bezelFragmentShaderSource =
     "#version 120\n"
     "uniform sampler2D u_texture;\n"
+    "uniform float u_opacity;\n"
     "varying vec2 v_uv;\n"
     "void main()\n"
     "{\n"
-    "    gl_FragColor = texture2D(u_texture, v_uv);\n"
+    "    vec4 color = texture2D(u_texture, v_uv);\n"
+    "    color.a *= u_opacity;\n"
+    "    gl_FragColor = color;\n"
     "}\n";
+
+static void saveBezelAttribState(GLuint index, BezelAttribState *state)
+{
+    glad_glGetVertexAttribiv(index, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &state->enabled);
+    glad_glGetVertexAttribiv(index, GL_VERTEX_ATTRIB_ARRAY_SIZE, &state->size);
+    glad_glGetVertexAttribiv(index, GL_VERTEX_ATTRIB_ARRAY_STRIDE, &state->stride);
+    glad_glGetVertexAttribiv(index, GL_VERTEX_ATTRIB_ARRAY_TYPE, &state->type);
+    glad_glGetVertexAttribiv(index, GL_VERTEX_ATTRIB_ARRAY_NORMALIZED, &state->normalized);
+    glad_glGetVertexAttribiv(index, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &state->buffer);
+    glad_glGetVertexAttribPointerv(index, GL_VERTEX_ATTRIB_ARRAY_POINTER, &state->pointer);
+}
+
+static void restoreBezelAttribState(GLuint index, const BezelAttribState *state)
+{
+    glad_glBindBuffer(GL_ARRAY_BUFFER, (GLuint)state->buffer);
+    glad_glVertexAttribPointer(index, state->size, (GLenum)state->type, (GLboolean)state->normalized, state->stride, state->pointer);
+
+    if (state->enabled)
+        glad_glEnableVertexAttribArray(index);
+    else
+        glad_glDisableVertexAttribArray(index);
+}
 
 static GLuint compileBezelShader(GLenum type, const char *source)
 {
@@ -103,6 +140,7 @@ static GLuint createBezelProgram(void)
 
     bezelProjectionLoc = glad_glGetUniformLocation(program, "u_projection");
     bezelTextureLoc = glad_glGetUniformLocation(program, "u_texture");
+    bezelOpacityLoc = glad_glGetUniformLocation(program, "u_opacity");
 
     return program;
 }
@@ -205,10 +243,16 @@ void initBezelOverlay(void)
 
     bezelProgram = createBezelProgram();
     if (!bezelProgram)
+    {
+        shutdownBezelOverlay();
         return;
+    }
 
     if (!createBezelGeometry())
+    {
+        shutdownBezelOverlay();
         return;
+    }
 
     bezelInitialized = 1;
 }
@@ -243,7 +287,7 @@ void drawBezelOverlay(void)
     GLboolean depthWasEnabled = glad_glIsEnabled(GL_DEPTH_TEST);
     GLboolean scissorWasEnabled = glad_glIsEnabled(GL_SCISSOR_TEST);
     GLboolean cullWasEnabled = glad_glIsEnabled(GL_CULL_FACE);
-    GLboolean textureWasEnabled = glad_glIsEnabled(GL_TEXTURE_2D);
+    GLboolean texture0WasEnabled;
     GLboolean fragmentProgramWasEnabled = glad_glIsEnabled(GL_FRAGMENT_PROGRAM_ARB);
     GLboolean vertexProgramWasEnabled = glad_glIsEnabled(GL_VERTEX_PROGRAM_ARB);
     GLboolean oldColorMask[4];
@@ -254,23 +298,34 @@ void drawBezelOverlay(void)
 	GLint oldTexture = 0;
 	GLint oldVao = 0;
 	GLint oldArrayBuffer = 0;
-	GLint oldFramebuffer = 0;
-	GLint oldBlendSrc = 0;
-	GLint oldBlendDst = 0;
-	GLint oldBlendEquation = 0;
+	GLint oldReadFramebuffer = 0;
+	GLint oldDrawFramebuffer = 0;
+	GLint oldBlendSrcRgb = 0;
+	GLint oldBlendDstRgb = 0;
+	GLint oldBlendSrcAlpha = 0;
+	GLint oldBlendDstAlpha = 0;
+	GLint oldBlendEquationRgb = 0;
+	GLint oldBlendEquationAlpha = 0;
+    BezelAttribState oldPosAttrib;
+    BezelAttribState oldUvAttrib;
 
     glad_glGetIntegerv(GL_VIEWPORT, oldViewport);
     glad_glGetIntegerv(GL_CURRENT_PROGRAM, &oldProgram);
     glad_glGetIntegerv(GL_ACTIVE_TEXTURE, &oldActiveTexture);
     glad_glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &oldVao);
     glad_glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &oldArrayBuffer);
-	glad_glGetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFramebuffer);
-    glad_glGetIntegerv(GL_BLEND_SRC, &oldBlendSrc);
-    glad_glGetIntegerv(GL_BLEND_DST, &oldBlendDst);
-    glad_glGetIntegerv(GL_BLEND_EQUATION_RGB, &oldBlendEquation);
+	glad_glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &oldReadFramebuffer);
+	glad_glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &oldDrawFramebuffer);
+    glad_glGetIntegerv(GL_BLEND_SRC_RGB, &oldBlendSrcRgb);
+    glad_glGetIntegerv(GL_BLEND_DST_RGB, &oldBlendDstRgb);
+    glad_glGetIntegerv(GL_BLEND_SRC_ALPHA, &oldBlendSrcAlpha);
+    glad_glGetIntegerv(GL_BLEND_DST_ALPHA, &oldBlendDstAlpha);
+    glad_glGetIntegerv(GL_BLEND_EQUATION_RGB, &oldBlendEquationRgb);
+    glad_glGetIntegerv(GL_BLEND_EQUATION_ALPHA, &oldBlendEquationAlpha);
     glad_glGetBooleanv(GL_COLOR_WRITEMASK, oldColorMask);
 
     glad_glActiveTexture(GL_TEXTURE0);
+    texture0WasEnabled = glad_glIsEnabled(GL_TEXTURE_2D);
     glad_glGetIntegerv(GL_TEXTURE_BINDING_2D, &oldTexture);
 
     glad_glDisable(GL_FRAGMENT_PROGRAM_ARB);
@@ -295,6 +350,9 @@ void drawBezelOverlay(void)
 
     if (bezelTextureLoc >= 0)
         glad_glUniform1i(bezelTextureLoc, 0);
+
+    if (bezelOpacityLoc >= 0)
+        glad_glUniform1f(bezelOpacityLoc, cfg->bezelOpacity);
 
     if (bezelProjectionLoc >= 0)
     {
@@ -323,6 +381,9 @@ void drawBezelOverlay(void)
 
 	if (posLoc >= 0 && uvLoc >= 0)
 	{
+        saveBezelAttribState((GLuint)posLoc, &oldPosAttrib);
+        saveBezelAttribState((GLuint)uvLoc, &oldUvAttrib);
+
 		glad_glBindBuffer(GL_ARRAY_BUFFER, bezelVbo);
 		glad_glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
 
@@ -348,17 +409,23 @@ void drawBezelOverlay(void)
 
     glad_glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    glad_glDisableVertexAttribArray((GLuint)posLoc);
-    glad_glDisableVertexAttribArray((GLuint)uvLoc);
+    restoreBezelAttribState((GLuint)posLoc, &oldPosAttrib);
+    restoreBezelAttribState((GLuint)uvLoc, &oldUvAttrib);
 }
 
 	glad_glBindBuffer(GL_ARRAY_BUFFER, oldArrayBuffer);
 
     glad_glBindTexture(GL_TEXTURE_2D, (GLuint)oldTexture);
-    glad_glActiveTexture((GLenum)oldActiveTexture);
+    if (texture0WasEnabled)
+        glad_glEnable(GL_TEXTURE_2D);
+    else
+        glad_glDisable(GL_TEXTURE_2D);
 
     glad_glUseProgram((GLuint)oldProgram);
-	glad_glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)oldFramebuffer);
+    if (glad_glBindVertexArray)
+        glad_glBindVertexArray((GLuint)oldVao);
+	glad_glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)oldReadFramebuffer);
+	glad_glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)oldDrawFramebuffer);
 	glad_glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
 
     glad_glColorMask(
@@ -368,8 +435,8 @@ void drawBezelOverlay(void)
         oldColorMask[3]
     );
 
-    glad_glBlendEquation((GLenum)oldBlendEquation);
-    glad_glBlendFunc((GLenum)oldBlendSrc, (GLenum)oldBlendDst);
+    glad_glBlendEquationSeparate((GLenum)oldBlendEquationRgb, (GLenum)oldBlendEquationAlpha);
+    glad_glBlendFuncSeparate((GLenum)oldBlendSrcRgb, (GLenum)oldBlendDstRgb, (GLenum)oldBlendSrcAlpha, (GLenum)oldBlendDstAlpha);
 
     if (fragmentProgramWasEnabled)
         glad_glEnable(GL_FRAGMENT_PROGRAM_ARB);
@@ -381,10 +448,7 @@ void drawBezelOverlay(void)
     else
         glad_glDisable(GL_VERTEX_PROGRAM_ARB);
 
-    if (textureWasEnabled)
-        glad_glEnable(GL_TEXTURE_2D);
-    else
-        glad_glDisable(GL_TEXTURE_2D);
+    glad_glActiveTexture((GLenum)oldActiveTexture);
 
     if (blendWasEnabled)
         glad_glEnable(GL_BLEND);
@@ -432,6 +496,10 @@ void shutdownBezelOverlay(void)
         glad_glDeleteProgram(bezelProgram);
         bezelProgram = 0;
     }
+
+    bezelProjectionLoc = -1;
+    bezelTextureLoc = -1;
+    bezelOpacityLoc = -1;
 
     if (bezelSurface)
     {

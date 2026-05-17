@@ -302,6 +302,7 @@ void sdlQuit()
 
     if (g_SdlContext)
     {
+        shutdownBezelOverlay();
         SDL_GL_DestroyContext(g_SdlContext);
         g_SdlContext = NULL;
     }

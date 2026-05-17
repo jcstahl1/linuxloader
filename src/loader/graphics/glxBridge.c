@@ -454,9 +454,9 @@ void bridgeGlxSwapBuffers(Display *dpy, GLXDrawable drawable)
 	blitStretch();
 
 	pollEvents();
-	
+
 	drawBezelOverlay();
-	
+
 	if (config->borderEnabled)
         drawGameBorder(drawableW, drawableH, config->whiteBorderPercentage, config->blackBorderPercentage);
 
