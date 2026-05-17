@@ -72,21 +72,30 @@ void blitSetWidthandHeightSize()
         }
     }
     else if (gId == GHOST_SQUAD_EVOLUTION_SBNJ || gGrp == GROUP_VT3_TEST)
-    {
-        blitWidth = 640;
-        blitHeight = 480;
-    }
-    else if (gId == QUIZ_AXA_SBMS || gId == QUIZ_AXA_SBUR_LIVE || gId == MJ4_SBPN_REVG || gId == MJ4_EVO_SBTA)
-    {
-        blitWidth = 1024;
-        blitHeight = 768;
-    }
-    else
-    {
-        blitWidth = gWidth;
-        blitHeight = gHeight;
-    }
-}
+	{
+		blitWidth = 640;
+		blitHeight = 480;
+	}
+	#ifdef _WIN32
+	else if ((gId == AFTER_BURNER_CLIMAX_REVA ||
+			gId == AFTER_BURNER_CLIMAX_REVB ||
+			gId == AFTER_BURNER_CLIMAX_REVC) &&
+			config->keepAspectRatio)
+	{
+		blitWidth = 640;
+		blitHeight = 480;
+	}
+	#endif
+	else if (gId == QUIZ_AXA_SBMS || gId == QUIZ_AXA_SBUR_LIVE || gId == MJ4_SBPN_REVG || gId == MJ4_EVO_SBTA)
+	{
+		blitWidth = 1024;
+		blitHeight = 768;
+	}
+	else
+	{
+		blitWidth = gWidth;
+		blitHeight = gHeight;
+	}
 
 int blitInitializeFbo()
 {
