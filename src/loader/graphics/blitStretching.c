@@ -74,6 +74,7 @@ void blitSetWidthandHeightSize()
         }
     }
     else if (gId == GHOST_SQUAD_EVOLUTION_SBNJ || gGrp == GROUP_VT3_TEST)
+    else if (gId == GHOST_SQUAD_EVOLUTION_SBNJ || gGrp == GROUP_VT3_TEST)
     {
         blitWidth = 640;
         blitHeight = 480;

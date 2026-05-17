@@ -36,6 +36,12 @@ int createDefaultIni(const char *filePath)
     fprintf(file, "BLACK_BORDER_PERCENTAGE = %.1f\n\n", defaults.blackBorderPercentage * 100.0f);
     fprintf(file, "# Set to keep the aspect ratio in games like Sega Race TV Primeval Hunt and LGJ-SP\n");
     fprintf(file, "KEEP_ASPECT_RATIO = %s\n\n", defaults.keepAspectRatio ? "true" : "false");
+	fprintf(file, "# Set to true to draw a bezel overlay image on top of the game\n");
+	fprintf(file, "BEZEL_ENABLED = %s\n\n", defaults.bezelEnabled ? "true" : "false");
+	fprintf(file, "# Path to the bezel overlay image\n");
+	fprintf(file, "BEZEL_PATH = %s\n\n", defaults.bezelPath);
+    fprintf(file, "# Opacity of the bezel overlay from 0.0 to 1.0\n");
+    fprintf(file, "BEZEL_OPACITY = %.2f\n\n", defaults.bezelOpacity);
     fprintf(file, "# Set to true to enable the mouse pointer/Cursor\nHIDE_CURSOR = %s\n\n", defaults.hideCursor ? "true" : "false");
 
     // [Input]

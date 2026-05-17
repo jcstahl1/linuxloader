@@ -336,6 +336,9 @@ typedef struct
     float whiteBorderPercentage;
     float blackBorderPercentage;
     int borderEnabled;
+	int bezelEnabled;
+	char bezelPath[MAX_PATH_LENGTH];
+    float bezelOpacity;
     int enableCrosshairs;
     int gsevoCrosshairAlwaysOn;
     int gsevoCrosshairAlwaysOff;

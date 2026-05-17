@@ -11,6 +11,7 @@
 #include "../elfLoader/glHooks.hpp"
 #include "../config/config.h"
 #include "border.h"
+#include "bezel.h"
 #include "crossHair.h"
 #include "blitStretching.h"
 #include "fpsLimiter.h"
@@ -447,17 +448,19 @@ void bridgeGlxSwapBuffers(Display *dpy, GLXDrawable drawable)
 {
     EmulatorConfig *config = getConfig();
 
-    if (config->borderEnabled)
-        drawGameBorder(config->width, config->height, config->whiteBorderPercentage, config->blackBorderPercentage);
-
     if (p1CrossHairInitialized || p2CrossHairInitialized)
-        renderCrosshairs();
+		renderCrosshairs();
 
-    blitStretch();
+	blitStretch();
 
-    pollEvents();
+	pollEvents();
 
-    SDL_GL_SwapWindow(getSDLWindow());
+	drawBezelOverlay();
+
+	if (config->borderEnabled)
+        drawGameBorder(drawableW, drawableH, config->whiteBorderPercentage, config->blackBorderPercentage);
+
+	SDL_GL_SwapWindow(getSDLWindow());
 
     if (config->fpsLimiter)
         frameTiming();
