@@ -78,11 +78,13 @@ void blitSetWidthandHeightSize()
         blitWidth = 640;
         blitHeight = 480;
     }
+#ifdef _WIN32
     else if (gGrp == GROUP_ABC && config->keepAspectRatio)
     {
         blitWidth = 640;
         blitHeight = 480;
     }
+#endif
     else if (gId == QUIZ_AXA_SBMS || gId == QUIZ_AXA_SBUR_LIVE || gId == MJ4_SBPN_REVG || gId == MJ4_EVO_SBTA)
     {
         blitWidth = 1024;
