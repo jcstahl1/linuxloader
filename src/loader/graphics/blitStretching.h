@@ -21,3 +21,4 @@ void initBlitting();
 void blitSetWidthandHeightSize();
 int blitInitializeFbo();
 void blitStretch();
+void getBlitViewport(int *x, int *y, int *width, int *height);

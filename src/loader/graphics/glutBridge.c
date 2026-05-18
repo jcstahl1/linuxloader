@@ -84,6 +84,11 @@ void bridgeGlutSwapBuffers(void)
 {
     EmulatorConfig *config = getConfig();
 
+    int viewportX = 0;
+    int viewportY = 0;
+    int viewportW = 0;
+    int viewportH = 0;
+
     if (gGrp == GROUP_OUTRUN || gGrp == GROUP_OUTRUN_TEST)
         pollEvents();
 
@@ -92,10 +97,16 @@ void bridgeGlutSwapBuffers(void)
 
     blitStretch();
 
+    getBlitViewport(&viewportX, &viewportY, &viewportW, &viewportH);
+
     drawBezelOverlay();
 
-	if (config->borderEnabled && gId != GHOST_SQUAD_EVOLUTION_SBNJ)
-        drawGameBorder(drawableW, drawableH, config->whiteBorderPercentage, config->blackBorderPercentage);
+    if (config->borderEnabled)
+    {
+        drawGameBorder(viewportX, viewportY, viewportW, viewportH,
+                       config->whiteBorderPercentage,
+                       config->blackBorderPercentage);
+    }
 
     SDL_GL_SwapWindow(g_SdlWindow);
 

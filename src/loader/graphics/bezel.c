@@ -423,7 +423,9 @@ void drawBezelOverlay(void)
 
     glad_glUseProgram((GLuint)oldProgram);
     if (glad_glBindVertexArray)
-        glad_glBindVertexArray((GLuint)oldVao);
+		{
+			glad_glBindVertexArray((GLuint)oldVao);
+		}	
 	glad_glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)oldReadFramebuffer);
 	glad_glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)oldDrawFramebuffer);
 	glad_glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);

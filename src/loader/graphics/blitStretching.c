@@ -74,23 +74,22 @@ void blitSetWidthandHeightSize()
         }
     }
     else if (gId == GHOST_SQUAD_EVOLUTION_SBNJ || gGrp == GROUP_VT3_TEST)
-    else if (gId == GHOST_SQUAD_EVOLUTION_SBNJ || gGrp == GROUP_VT3_TEST)
     {
-        blitWidth = 640;
-        blitHeight = 480;
-    }
-#ifdef _WIN32
+		blitWidth = 640;
+		blitHeight = 480;
+	}
+	#ifdef _WIN32
     else if (gGrp == GROUP_ABC && config->keepAspectRatio)
-    {
-        blitWidth = 640;
-        blitHeight = 480;
-    }
-#endif
+	{
+		blitWidth = 640;
+		blitHeight = 480;
+	}
+	#endif
     else if (gId == QUIZ_AXA_SBMS || gId == QUIZ_AXA_SBUR_LIVE || gId == MJ4_SBPN_REVG || gId == MJ4_EVO_SBTA)
-    {
-        blitWidth = 1024;
-        blitHeight = 768;
-    }
+	{
+		blitWidth = 1024;
+		blitHeight = 768;
+	}
     else
     {
         blitWidth = gWidth;
@@ -234,19 +233,21 @@ void blitStretch()
         float gameAspect = (float)blitWidth / (float)blitHeight;
 		float windowAspect = (float)drawableW / (float)drawableH;
 
-        dest.W = drawableW;
-        dest.H = drawableH;
+		dest.X = 0;
+		dest.Y = 0;
+		dest.W = drawableW;
+		dest.H = drawableH;
 
 		if (windowAspect > gameAspect)
-        {
-            dest.W = (GLsizei)(drawableH * gameAspect);
-            dest.X = (drawableW - dest.W) / 2;
-        }
-        else if (windowAspect < gameAspect)
-        {
-            dest.H = (GLsizei)(drawableW / gameAspect);
-            dest.Y = (drawableH - dest.H) / 2;
-        }
+		{
+			dest.W = (GLsizei)(drawableH * gameAspect);
+			dest.X = (drawableW - dest.W) / 2;
+		}
+		else if (windowAspect < gameAspect)
+		{
+			dest.H = (GLsizei)(drawableW / gameAspect);
+			dest.Y = (drawableH - dest.H) / 2;
+		}
 	   
         glad_glBindFramebuffer(GL_FRAMEBUFFER, 0);
         CHECK_GL("bind default framebuffer");
@@ -298,4 +299,18 @@ void blitStretch()
 
         glad_glClearColor(oldClearColor[0], oldClearColor[1], oldClearColor[2], oldClearColor[3]);
     }
+}
+void getBlitViewport(int *x, int *y, int *width, int *height)
+{
+    if (x)
+        *x = dest.X;
+
+    if (y)
+        *y = dest.Y;
+
+    if (width)
+        *width = dest.W;
+
+    if (height)
+        *height = dest.H;
 }

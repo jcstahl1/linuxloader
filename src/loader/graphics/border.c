@@ -2,43 +2,54 @@
 
 #include "border.h"
 
-void drawBorderWithOffset(int width, int height, float borderPercentage, float offsetPercentage, GLfloat *color)
+void drawBorderWithOffset(int x, int y, int width, int height, float borderPercentage, float offsetPercentage, GLfloat *color)
 {
-    // Border thickness based on the percentage of the width/height
-    int borderWidth = (int)(width * borderPercentage); // Border width as a percentage of the screen width
+    // Border thickness based on the percentage of the viewport width
+    int borderWidth = (int)(width * borderPercentage);
     int borderHeight = borderWidth;
 
-    // Offset based on the percentage of the width/height
-    int offsetX = (int)(width * offsetPercentage); // Horizontal offset from the screen edge
+    // Offset based on the percentage of the viewport width
+    int offsetX = (int)(width * offsetPercentage);
     int offsetY = offsetX;
+
+    int left = x;
+    int right = x + width;
+    int top = y;
+    int bottom = y + height;
 
     // Set the clear color based on the color parameter
     glad_glClearColor(color[0], color[1], color[2], color[3]);
 
-    // Left side (borderWidth wide from top to bottom, starting from the left edge with offset)
-    glad_glScissor(offsetX, offsetY, borderWidth,
-                   height - 2 * offsetY); // X = offsetX, Y = offsetY, Width = borderWidth, Height = (height - 2 * offsetY)
+    // Left side
+    glad_glScissor(left + offsetX,
+                   top + offsetY,
+                   borderWidth,
+                   height - 2 * offsetY);
     glad_glClear(GL_COLOR_BUFFER_BIT);
 
-    // Right side (borderWidth wide from top to bottom, starting from the right edge with offset)
-    glad_glScissor(
-        width - borderWidth - offsetX, offsetY, borderWidth,
-        height - 2 * offsetY); // X = (width - borderWidth - offsetX), Y = offsetY, Width = borderWidth, Height = (height - 2 * offsetY)
+    // Right side
+    glad_glScissor(right - borderWidth - offsetX,
+                   top + offsetY,
+                   borderWidth,
+                   height - 2 * offsetY);
     glad_glClear(GL_COLOR_BUFFER_BIT);
 
-    // Top side (borderHeight wide from left to right, starting from the top edge with offset)
-    glad_glScissor(offsetX, offsetY, width - 2 * offsetX,
-                   borderHeight); // X = offsetX, Y = offsetY, Width = (width - 2 * offsetX), Height = borderHeight
+    // Top side
+    glad_glScissor(left + offsetX,
+                   top + offsetY,
+                   width - 2 * offsetX,
+                   borderHeight);
     glad_glClear(GL_COLOR_BUFFER_BIT);
 
-    // Bottom side (borderHeight wide from left to right, starting from the bottom edge with offset)
-    glad_glScissor(
-        offsetX, height - borderHeight - offsetY, width - 2 * offsetX,
-        borderHeight); // X = offsetX, Y = (height - borderHeight - offsetY), Width = (width - 2 * offsetX), Height = borderHeight
+    // Bottom side
+    glad_glScissor(left + offsetX,
+                   bottom - borderHeight - offsetY,
+                   width - 2 * offsetX,
+                   borderHeight);
     glad_glClear(GL_COLOR_BUFFER_BIT);
 }
 
-void drawGameBorder(int width, int height, float whiteBorderPercentage, float blackBorderPercentage)
+void drawGameBorder(int x, int y, int width, int height, float whiteBorderPercentage, float blackBorderPercentage)
 {
     // Store the old clear colour
     GLfloat originalClearColour[4];
@@ -49,8 +60,8 @@ void drawGameBorder(int width, int height, float whiteBorderPercentage, float bl
 
     glad_glEnable(GL_SCISSOR_TEST);
 
-    drawBorderWithOffset(width, height, whiteBorderPercentage, blackBorderPercentage, whiteColour);
-    drawBorderWithOffset(width, height, blackBorderPercentage, 0, blackColour);
+    drawBorderWithOffset(x, y, width, height, whiteBorderPercentage, blackBorderPercentage, whiteColour);
+    drawBorderWithOffset(x, y, width, height, blackBorderPercentage, 0, blackColour);
 
     glad_glDisable(GL_SCISSOR_TEST);
 

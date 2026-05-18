@@ -38,10 +38,12 @@ int createDefaultIni(const char *filePath)
     fprintf(file, "KEEP_ASPECT_RATIO = %s\n\n", defaults.keepAspectRatio ? "true" : "false");
 	fprintf(file, "# Set to true to draw a bezel overlay image on top of the game\n");
 	fprintf(file, "BEZEL_ENABLED = %s\n\n", defaults.bezelEnabled ? "true" : "false");
-	fprintf(file, "# Path to the bezel overlay image\n");
+	fprintf(file, "# Path to the bezel overlay image (ex: \"path\\to\\filename.png\")\n");
+	fprintf(file, "# Keep bezel artwork outside the gameplay area. If it overlaps the game window,\n");
+	fprintf(file, "# it may appear above the Sinden border in some cases.\n");
 	fprintf(file, "BEZEL_PATH = %s\n\n", defaults.bezelPath);
-    fprintf(file, "# Opacity of the bezel overlay from 0.0 to 1.0\n");
-    fprintf(file, "BEZEL_OPACITY = %.2f\n\n", defaults.bezelOpacity);
+	fprintf(file, "# Opacity of the bezel overlay from 0.0 to 1.0\n");
+	fprintf(file, "BEZEL_OPACITY = %.2f\n\n", defaults.bezelOpacity);
     fprintf(file, "# Set to true to enable the mouse pointer/Cursor\nHIDE_CURSOR = %s\n\n", defaults.hideCursor ? "true" : "false");
 
     // [Input]

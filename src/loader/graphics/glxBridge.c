@@ -448,19 +448,30 @@ void bridgeGlxSwapBuffers(Display *dpy, GLXDrawable drawable)
 {
     EmulatorConfig *config = getConfig();
 
+    int viewportX = 0;
+    int viewportY = 0;
+    int viewportW = 0;
+    int viewportH = 0;
+
     if (p1CrossHairInitialized || p2CrossHairInitialized)
-		renderCrosshairs();
+        renderCrosshairs();
 
-	blitStretch();
+    blitStretch();
 
-	pollEvents();
+    getBlitViewport(&viewportX, &viewportY, &viewportW, &viewportH);
 
-	drawBezelOverlay();
+    pollEvents();
 
-	if (config->borderEnabled)
-        drawGameBorder(drawableW, drawableH, config->whiteBorderPercentage, config->blackBorderPercentage);
+    drawBezelOverlay();
 
-	SDL_GL_SwapWindow(getSDLWindow());
+    if (config->borderEnabled)
+    {
+        drawGameBorder(viewportX, viewportY, viewportW, viewportH,
+                       config->whiteBorderPercentage,
+                       config->blackBorderPercentage);
+    }
+
+    SDL_GL_SwapWindow(getSDLWindow());
 
     if (config->fpsLimiter)
         frameTiming();

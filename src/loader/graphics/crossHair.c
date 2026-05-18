@@ -379,7 +379,9 @@ void renderGsEvoCrosshairs(void)
 
     EmulatorConfig *config = getConfig();
     if (config->borderEnabled)
-        drawGameBorder(640, 480, config->whiteBorderPercentage, config->blackBorderPercentage);
+        drawGameBorder(0, 0, 640, 480,
+               config->whiteBorderPercentage,
+               config->blackBorderPercentage);
 
     glad_glPushAttrib(GL_ALL_ATTRIB_BITS);
     // glad_glDisable(GL_DEPTH_TEST); // for HOD4
