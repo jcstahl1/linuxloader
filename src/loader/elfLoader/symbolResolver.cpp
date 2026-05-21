@@ -20,6 +20,7 @@
 #include <direct.h>
 #include <process.h>
 #include <string>
+#include <errno.h>
 #include <math.h>
 #include <stdlib.h>
 #include <fstream>
@@ -88,6 +89,108 @@ extern "C" int emuSemTrywait(void *sem);
 extern "C" int emuSemPost(void *sem);
 extern "C" int emuSemGetValue(void *sem, int *sval);
 
+static double loaderAtan(double x)
+{
+    return atan(x);
+}
+
+static double loaderAtan2(double y, double x)
+{
+    return atan2(y, x);
+}
+
+static float loaderTanf(float x)
+{
+    return tanf(x);
+}
+
+static float loaderCosf(float x)
+{
+    return cosf(x);
+}
+
+static float loaderAcosf(float x)
+{
+    return acosf(x);
+}
+
+static float loaderLogf(float x)
+{
+    return logf(x);
+}
+
+static int loaderFinitef(float x)
+{
+    return isfinite(x) ? 1 : 0;
+}
+
+static bool loaderIsWritablePointer(void *ptr, size_t size)
+{
+    if (!ptr)
+    {
+        return false;
+    }
+
+    MEMORY_BASIC_INFORMATION mbi;
+    if (VirtualQuery(ptr, &mbi, sizeof(mbi)) == 0)
+    {
+        return false;
+    }
+
+    if (mbi.State != MEM_COMMIT)
+    {
+        return false;
+    }
+
+    if (mbi.Protect & PAGE_GUARD)
+    {
+        return false;
+    }
+
+    DWORD protect = mbi.Protect & 0xff;
+    bool writable =
+        protect == PAGE_READWRITE ||
+        protect == PAGE_WRITECOPY ||
+        protect == PAGE_EXECUTE_READWRITE ||
+        protect == PAGE_EXECUTE_WRITECOPY;
+
+    if (!writable)
+    {
+        return false;
+    }
+
+    uintptr_t start = reinterpret_cast<uintptr_t>(ptr);
+    uintptr_t end = start + size;
+    uintptr_t regionEnd = reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
+
+    return end <= regionEnd;
+}
+
+static void loaderSincosf()
+{
+    __asm__ __volatile__(
+        "pxor %%xmm0, %%xmm0\n\t"
+        "movl $0x3f800000, -4(%%esp)\n\t"
+        "movss -4(%%esp), %%xmm1\n\t"
+        :
+        :
+        : "memory", "xmm0", "xmm1"
+    );
+}
+
+static void *loaderIntelVecMemzero(void *dest, size_t n)
+{
+    return memset(dest, 0, n);
+}
+
+static int loaderSetrlimit(int resource, const void *rlim)
+{
+    (void)resource;
+    (void)rlim;
+    errno = ENOSYS;
+    return -1;
+}
+
 SymbolResolver::SymbolResolver()
 {
     m_VTables["__gmon_start__"] = reinterpret_cast<void *>(__gmon_start__);
@@ -108,18 +211,38 @@ SymbolResolver::SymbolResolver()
     m_VTables["strcoll"] = reinterpret_cast<void *>(MemoryManager::customStrcoll);
     m_VTables["strxfrm"] = reinterpret_cast<void *>(MemoryManager::customStrxfrm);
     m_VTables["memcpy"] = reinterpret_cast<void *>(memcpy);
+    m_VTables["_intel_fast_memcpy"] = reinterpret_cast<void *>(memcpy);
     m_VTables["memset"] = reinterpret_cast<void *>(memset);
+    m_VTables["_intel_fast_memset"] = reinterpret_cast<void *>(memset);
+    m_VTables["__intel_VEC_memzero"] = reinterpret_cast<void *>(loaderIntelVecMemzero);
     m_VTables["memcmp"] = reinterpret_cast<void *>(memcmp);
+    m_VTables["_intel_fast_memcmp"] = reinterpret_cast<void *>(memcmp);
     m_VTables["memchr"] = reinterpret_cast<void *>(memchr);
     m_VTables["strlen"] = reinterpret_cast<void *>(strlen);
     m_VTables["strcpy"] = reinterpret_cast<void *>(strcpy);
     m_VTables["strncpy"] = reinterpret_cast<void *>(sharedStrncpy);
     m_VTables["strcmp"] = reinterpret_cast<void *>(strcmp);
+    m_VTables["atan"] = reinterpret_cast<void *>(loaderAtan);
+    m_VTables["__libm_sse2_atan"] = reinterpret_cast<void *>(loaderAtan);
+    m_VTables["atan2"] = reinterpret_cast<void *>(loaderAtan2);
+    m_VTables["__libm_sse2_atan2"] = reinterpret_cast<void *>(loaderAtan2);
+    m_VTables["tanf"] = reinterpret_cast<void *>(loaderTanf);
+    m_VTables["__libm_sse2_tanf"] = reinterpret_cast<void *>(loaderTanf);
+    m_VTables["cosf"] = reinterpret_cast<void *>(loaderCosf);
+    m_VTables["__libm_sse2_cosf"] = reinterpret_cast<void *>(loaderCosf);
+    m_VTables["acosf"] = reinterpret_cast<void *>(loaderAcosf);
+    m_VTables["__libm_sse2_acosf"] = reinterpret_cast<void *>(loaderAcosf);
+    m_VTables["logf"] = reinterpret_cast<void *>(loaderLogf);
+    m_VTables["__libm_sse2_logf"] = reinterpret_cast<void *>(loaderLogf);
+    m_VTables["__libm_sse2_sincosf"] = reinterpret_cast<void *>(loaderSincosf);
+    m_VTables["__finitef"] = reinterpret_cast<void *>(loaderFinitef);
+    m_VTables["setrlimit"] = reinterpret_cast<void *>(loaderSetrlimit);
     m_VTables["strncmp"] = reinterpret_cast<void *>(strncmp);
     m_VTables["strchr"] = reinterpret_cast<void *>(strchr);
     m_VTables["strrchr"] = reinterpret_cast<void *>(strrchr);
     m_VTables["strstr"] = reinterpret_cast<void *>(strstr);
     m_VTables["strtol"] = reinterpret_cast<void *>(strtol);
+    m_VTables["strtoll"] = reinterpret_cast<void *>(strtoll);
     m_VTables["strtod"] = reinterpret_cast<void *>(strtod);
     m_VTables["strerror"] = reinterpret_cast<void *>(strerror);
     m_VTables["strtok"] = reinterpret_cast<void *>(strtok);

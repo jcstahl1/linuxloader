@@ -215,6 +215,12 @@ uint32_t bridgeGettid(void)
     return _getpid();
 }
 
+void *srtvGetLanParamStub(void *arg)
+{
+    (void)arg;
+    return (void *)0x089bc824;
+}
+
 int patchSO(uintptr_t base, const char *soPath)
 {
     switch (gId)
@@ -2710,7 +2716,20 @@ int initPatch()
             detourFunction(0x084d44fc, amDipswSetLed);
             detourFunction(0x084d4485, amDipswGetData);
             patchMemoryFromString(0x0804edb2, "9090909090"); //__intel_new_proc_init_P
+#ifdef _WIN32
+            replaceCallAtAddress(0x085266be, bridgeGettid);  // gettid syscall wrapper
+#endif
+            patchMemoryFromString(0x083e754a, "9090"); // disable forward NaN walk in light-key sort
+            patchMemoryFromString(0x083e7561, "9090"); // disable backward NaN walk in light-key sort
+            patchMemoryFromString(0x08120b43, "9090"); // disable NaN backward walk in render entry sort
             detourFunction(0x08178e6c, stubRetOne);          // _ZN7am_ctrl18SetNetworkAddrEth0Ejj.
+            detourFunction(0x08185564, srtvGetLanParamStub); // klib::lan::GetLanParam
+            detourFunction(0x083bb100, stubRetOne);          // klib::lan::CLanParam::Init
+            detourFunction(0x08346d46, stubRetOne);          // klib::lan::klInitPlayLan
+            detourFunction(0x08188014, stubRetZero);         // klib::lan::CheckConnectClient
+            detourFunction(0x08188904, stubRetZero);         // klib::lan::CheckNewUser
+            detourFunction(0x080ed984, stubReturn);          // klib::lan::klKeepAlive
+            detourFunction(0x08179064, stubRetOne);          // CConnectSceneObj::IsEndConnect
 
             detourFunction(0x0804e594, gl_XGetProcAddressARB);
             srtvElfShaderPatcher();
